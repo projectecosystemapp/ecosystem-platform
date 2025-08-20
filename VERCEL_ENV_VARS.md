@@ -2,20 +2,14 @@
 
 Copy and paste these EXACT values into your Vercel project's environment variables.
 
-## IMPORTANT: Get Your Database Connection String First
+## Database Connection String (VERIFIED WORKING)
 
-1. **Go to your Supabase Dashboard**: https://supabase.com/dashboard/project/mhyqvbeiqwkgfyqdfnlu
-2. **Click on "Settings" (gear icon) → "Database"**
-3. **Find "Connection String" section**
-4. **Click on "Connection Pooling" tab** (for Vercel)
-5. **Mode: Transaction**
-6. **Copy the connection string shown there**
+Your production database is in **Canada (ca-central-1)** region.
 
-It should look like one of these formats:
-- `postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres`
-- OR it might show the direct connection
-
-Replace [YOUR-PASSWORD] with: `ECOSYSTEMPROJECTAPPPASSWORD2025`
+Use this exact connection string for Vercel:
+```
+postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-1-ca-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+```
 
 ## Environment Variables for Vercel
 
@@ -23,7 +17,7 @@ Add these in Vercel Dashboard → Settings → Environment Variables:
 
 ```env
 # === SUPABASE (YOUR PRODUCTION VALUES) ===
-DATABASE_URL=[USE THE CONNECTION STRING FROM STEP ABOVE - Make sure to add ?pgbouncer=true at the end]
+DATABASE_URL=postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-1-ca-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
 NEXT_PUBLIC_SUPABASE_URL=https://mhyqvbeiqwkgfyqdfnlu.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_LwlRcXhiwjVcOTbI0AxAIw_nsGSTMYo
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_ikdSwj_-wY3I8IglYSz-FA_YVM7ALrp
