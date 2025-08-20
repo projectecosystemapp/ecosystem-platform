@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Database, Target, Users, Sparkles, CreditCard } from "lucide-react";
+import { Home, Settings, Database, Target, Users, Sparkles, CreditCard, DollarSign } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -19,9 +19,10 @@ import { useState, useEffect, useCallback } from "react";
 interface SidebarProps {
   profile: SelectProfile | null;
   userEmail?: string;
+  isProvider?: boolean;
 }
 
-export default function Sidebar({ profile, userEmail }: SidebarProps) {
+export default function Sidebar({ profile, userEmail, isProvider = false }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showUpgradePopup, setShowUpgradePopup] = useState(false);
@@ -44,6 +45,7 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
     { href: "/dashboard/data-source", icon: <Database size={16} />, label: "Data source" },
     { href: "/dashboard/targets", icon: <Target size={16} />, label: "Targets" },
     { href: "/dashboard/members", icon: <Users size={16} />, label: "Members" },
+    ...(isProvider ? [{ href: "/dashboard/payouts", icon: <DollarSign size={16} />, label: "Payouts" }] : []),
   ];
 
   // Handle navigation item click
