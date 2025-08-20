@@ -53,7 +53,7 @@ const ReviewCard: React.FC<ReviewCardProps> = ({name, title, content, delay, pro
 					fontFamily: 'system-ui, -apple-system, sans-serif',
 				}}
 			>
-				"{content}"
+				&ldquo;{content}&rdquo;
 			</p>
 			<div>
 				<p

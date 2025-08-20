@@ -164,7 +164,7 @@ export default function PaymentSuccessPopup({ profile: initialProfile }: Payment
       
       checkProfileUpdate();
     }
-  }, [searchParams, userId, retryCount]);
+  }, [searchParams, userId, retryCount, refreshProfileData]);
   
   // Handle closing the popup
   const handleClose = () => {
