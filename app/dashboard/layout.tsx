@@ -112,8 +112,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <Sidebar 
         profile={profile} 
         userEmail={userEmail} 
-        whopMonthlyPlanId={process.env.WHOP_PLAN_ID_MONTHLY || ''}
-        whopYearlyPlanId={process.env.WHOP_PLAN_ID_YEARLY || ''}
       />
       
       {/* Main content area */}

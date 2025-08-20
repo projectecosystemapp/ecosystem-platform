@@ -9,11 +9,11 @@ export const pendingProfilesTable = pgTable("pending_profiles", {
   
   // Payment details
   membership: membershipEnum("membership").notNull().default("pro"),
-  paymentProvider: paymentProviderEnum("payment_provider").default("whop"),
+  paymentProvider: paymentProviderEnum("payment_provider").default("stripe"),
   
-  // Whop specific fields
-  whopUserId: text("whop_user_id"),
-  whopMembershipId: text("whop_membership_id"),
+  // DEPRECATED: Whop fields kept for backwards compatibility, no longer used
+  whopUserId: text("whop_user_id"), // @deprecated
+  whopMembershipId: text("whop_membership_id"), // @deprecated
   
   // Plan details
   planDuration: text("plan_duration"), // "monthly" or "yearly"

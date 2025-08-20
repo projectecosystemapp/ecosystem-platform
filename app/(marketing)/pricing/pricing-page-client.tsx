@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import WhopPricingCard from "./whop-pricing-card";
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -11,12 +10,6 @@ import { motion, AnimatePresence } from "framer-motion";
 
 interface PricingPageClientProps {
   userId: string | null;
-  activePaymentProvider: string;
-  whopRedirectUrl: string;
-  whopMonthlyLink: string;
-  whopYearlyLink: string;
-  whopMonthlyPlanId: string;
-  whopYearlyPlanId: string;
   stripeMonthlyLink: string;
   stripeYearlyLink: string;
   monthlyPrice: string;
@@ -30,12 +23,6 @@ interface PricingPageClientProps {
  */
 export default function PricingPageClient({
   userId,
-  activePaymentProvider,
-  whopRedirectUrl,
-  whopMonthlyLink,
-  whopYearlyLink,
-  whopMonthlyPlanId,
-  whopYearlyPlanId,
   stripeMonthlyLink,
   stripeYearlyLink,
   monthlyPrice,
@@ -83,34 +70,17 @@ export default function PricingPageClient({
 
       <div className="flex justify-center">
         <div className="w-full max-w-md">
-          {activePaymentProvider === "stripe" ? (
-            // Stripe pricing card
-            <PricingCard
-              title="Business"
-              price={billingCycle === "monthly" ? monthlyPrice : yearlyPrice}
-              description={billingCycle === "monthly" ? "Billed monthly" : "Billed annually"}
-              buttonText="Get Started"
-              buttonLink={billingCycle === "monthly" ? stripeMonthlyLink : stripeYearlyLink}
-              userId={userId}
-              provider="stripe"
-              billingCycle={billingCycle}
-              savingsPercentage={savingsPercentage}
-              savingsAmount={savingsAmount}
-            />
-          ) : (
-            // Whop pricing card
-            <WhopPricingCard
-              title="Business"
-              price={billingCycle === "monthly" ? monthlyPrice : yearlyPrice}
-              description={billingCycle === "monthly" ? "Billed monthly" : "Billed yearly"}
-              buttonText="Get Started"
-              planId={billingCycle === "monthly" ? whopMonthlyPlanId : whopYearlyPlanId}
-              redirectUrl={whopRedirectUrl}
-              billingCycle={billingCycle}
-              savingsPercentage={savingsPercentage}
-              savingsAmount={savingsAmount}
-            />
-          )}
+          <PricingCard
+            title="Business"
+            price={billingCycle === "monthly" ? monthlyPrice : yearlyPrice}
+            description={billingCycle === "monthly" ? "Billed monthly" : "Billed annually"}
+            buttonText="Get Started"
+            buttonLink={billingCycle === "monthly" ? stripeMonthlyLink : stripeYearlyLink}
+            userId={userId}
+            billingCycle={billingCycle}
+            savingsPercentage={savingsPercentage}
+            savingsAmount={savingsAmount}
+          />
         </div>
       </div>
     </div>
@@ -124,8 +94,6 @@ interface PricingCardProps {
   buttonText: string;
   buttonLink: string;
   userId: string | null;
-  provider: 'stripe' | 'whop';
-  redirectUrl?: string;
   billingCycle: "monthly" | "yearly";
   savingsPercentage: number;
   savingsAmount: string;
@@ -137,42 +105,16 @@ function PricingCard({
   description, 
   buttonText, 
   buttonLink, 
-  userId, 
-  provider, 
-  redirectUrl,
+  userId,
   billingCycle,
   savingsPercentage,
   savingsAmount
 }: PricingCardProps) {
-  // Each provider expects different parameter names
+  // Add userId as ref parameter for Stripe tracking
   let finalButtonLink = buttonLink;
   
   if (userId) {
-    if (provider === 'whop') {
-      // Start with a clean URL by removing any existing parameters
-      const baseUrl = buttonLink.split('?')[0];
-      
-      // Build parameters properly
-      const params = new URLSearchParams();
-      
-      // Add d2c=true - CRITICAL for direct checkout without Whop account
-      params.append('d2c', 'true');
-      
-      // Add redirect URL
-      if (redirectUrl) {
-        params.append('redirect', redirectUrl);
-      }
-      
-      // Add userId both as a direct parameter and in metadata
-      params.append('userId', userId);
-      params.append('metadata[userId]', userId);
-      
-      // Construct the final URL
-      finalButtonLink = `${baseUrl}?${params.toString()}`;
-    } else {
-      // For Stripe, keep the original 'ref' parameter
-      finalButtonLink = `${buttonLink}${buttonLink.includes('?') ? '&' : '?'}ref=${userId}`;
-    }
+    finalButtonLink = `${buttonLink}${buttonLink.includes('?') ? '&' : '?'}ref=${userId}`;
   }
   
   // Benefits list
