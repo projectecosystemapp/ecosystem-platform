@@ -375,16 +375,18 @@ npm run test:e2e            # Run end-to-end tests
 
 ## ⚠️ CRITICAL IMPLEMENTATION NOTES
 
-1. **Provider Onboarding**: Must complete Stripe Connect before accepting bookings
-2. **Availability Logic**: Always check provider availability + existing bookings to prevent double-booking
-3. **Payment Timing**: Hold funds until service completion to handle disputes
-4. **Image Optimization**: Use Next.js Image component with proper sizing for gallery images
-5. **SEO**: Provider profiles must be SEO-optimized (meta tags, structured data)
-6. **Trust Signals**: Always show verification badges, response times, and completion rates
-7. **Mobile UX**: Test booking flow extensively on mobile devices
-8. **Timezone Handling**: Store all times in UTC, display in user's local timezone
-9. **Review Authenticity**: Only allow reviews from verified completed bookings
-10. **Commission Flexibility**: Make platform fee configurable per provider for promotions
+1. **NO WHOP INTEGRATION**: This project uses Stripe exclusively for payments. There is no Whop integration. Do not add or reference Whop in any code.
+2. **Authentication**: Clerk is the only authentication provider. All auth flows must use Clerk.
+3. **Provider Onboarding**: Must complete Stripe Connect before accepting bookings
+4. **Availability Logic**: Always check provider availability + existing bookings to prevent double-booking
+5. **Payment Timing**: Hold funds until service completion to handle disputes
+6. **Image Optimization**: Use Next.js Image component with proper sizing for gallery images
+7. **SEO**: Provider profiles must be SEO-optimized (meta tags, structured data)
+8. **Trust Signals**: Always show verification badges, response times, and completion rates
+9. **Mobile UX**: Test booking flow extensively on mobile devices
+10. **Timezone Handling**: Store all times in UTC, display in user's local timezone
+11. **Review Authenticity**: Only allow reviews from verified completed bookings
+12. **Commission Flexibility**: Make platform fee configurable per provider for promotions
 
 ## 🎯 SUCCESS METRICS
 

@@ -152,35 +152,20 @@ export default function UpgradePlanPopup({
       
       console.log(`Creating checkout with planId: ${planId}`);
       
-      // Call the API endpoint to create a checkout session
-      const response = await fetch('/api/whop/create-checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          planId,
-          redirectUrl: cleanRedirectUrl
-        }),
-      });
+      // For now, use Stripe payment links from environment variables
+      // TODO: Replace with Stripe Connect when marketplace is ready
+      const stripeMonthlyLink = process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_MONTHLY || "#";
+      const stripeYearlyLink = process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_YEARLY || "#";
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error creating checkout:', errorData);
-        setError('Failed to create checkout. Please try again later.');
+      const checkoutUrl = yearly ? stripeYearlyLink : stripeMonthlyLink;
+      
+      if (checkoutUrl === "#") {
+        console.error('Stripe payment links not configured');
+        setError('Payment system not configured. Please contact support.');
         return;
       }
       
-      const data = await response.json();
-      
-      if (!data.checkoutUrl) {
-        console.error('No checkout URL in response', data);
-        setError('Failed to create checkout. Please try again.');
-        return;
-      }
-      
-      console.log('Created Whop checkout with URL:', data.checkoutUrl);
-      console.log('Beginning redirect to Whop checkout page');
+      console.log('Redirecting to Stripe checkout');
       
       // Store information in localStorage to help with state persistence across redirects
       try {
@@ -191,8 +176,8 @@ export default function UpgradePlanPopup({
         console.error('Could not write to localStorage:', error);
       }
       
-      // Redirect to the checkout URL
-      window.location.href = data.checkoutUrl;
+      // Redirect to Stripe checkout
+      window.location.href = checkoutUrl;
     } catch (error) {
       console.error('Error initiating checkout:', error);
       setError('An unexpected error occurred. Please try again later.');

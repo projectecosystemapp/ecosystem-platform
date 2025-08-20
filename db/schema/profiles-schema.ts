@@ -2,17 +2,18 @@ import { pgEnum, pgTable, text, timestamp, integer, boolean } from "drizzle-orm/
 import { sql } from "drizzle-orm";
 
 export const membershipEnum = pgEnum("membership", ["free", "pro"]);
-export const paymentProviderEnum = pgEnum("payment_provider", ["stripe", "whop"]);
+export const paymentProviderEnum = pgEnum("payment_provider", ["stripe"]);
 
 export const profilesTable = pgTable("profiles", {
   userId: text("user_id").primaryKey().notNull(),
   email: text("email"),
   membership: membershipEnum("membership").notNull().default("free"),
-  paymentProvider: paymentProviderEnum("payment_provider").default("whop"),
+  paymentProvider: paymentProviderEnum("payment_provider").default("stripe"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
-  whopUserId: text("whop_user_id"),
-  whopMembershipId: text("whop_membership_id"),
+  // DEPRECATED: Whop fields kept for backwards compatibility, no longer used
+  whopUserId: text("whop_user_id"), // @deprecated
+  whopMembershipId: text("whop_membership_id"), // @deprecated
   planDuration: text("plan_duration"), // "monthly" or "yearly"
   // Billing cycle tracking
   billingCycleStart: timestamp("billing_cycle_start"),

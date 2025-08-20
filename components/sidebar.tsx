@@ -19,11 +19,9 @@ import { useState, useEffect, useCallback } from "react";
 interface SidebarProps {
   profile: SelectProfile | null;
   userEmail?: string;
-  whopMonthlyPlanId: string;
-  whopYearlyPlanId: string;
 }
 
-export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYearlyPlanId }: SidebarProps) {
+export default function Sidebar({ profile, userEmail }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showUpgradePopup, setShowUpgradePopup] = useState(false);
@@ -70,8 +68,8 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
       {profile && (
         <UpgradePlanPopup 
           profile={profile} 
-          monthlyPlanId={whopMonthlyPlanId} 
-          yearlyPlanId={whopYearlyPlanId}
+          monthlyPlanId="" 
+          yearlyPlanId=""
           isOpen={showUpgradePopup}
           onOpenChange={setShowUpgradePopup}
         />
@@ -181,10 +179,10 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
               </motion.div>
             </Link>
             
-            {/* Billing Button - Only visible for members with whopMembershipId */}
-            {profile?.whopMembershipId && (
+            {/* Billing Button - Only visible for Pro members with Stripe */}
+            {profile?.stripeSubscriptionId && (
               <Link 
-                href={`http://whop.com/orders/${profile.whopMembershipId}/manage`}
+                href={process.env.NEXT_PUBLIC_STRIPE_PORTAL_LINK || "/dashboard/settings"}
                 target="_blank"
                 rel="noopener noreferrer"
               >

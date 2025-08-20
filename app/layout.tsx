@@ -9,7 +9,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { createProfileAction } from "@/actions/profiles-actions";
-import { claimPendingProfile } from "@/actions/whop-actions";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,22 +31,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         const email = user?.emailAddresses?.[0]?.emailAddress;
         
         if (email) {
-          // Check if there's a pending profile with this email
-          console.log(`Checking for pending profile with email ${email} for user ${userId}`);
-          
-          // Try to claim any pending profile first
-          const claimResult = await claimPendingProfile(userId, email);
-          
-          if (!claimResult.success) {
-            // Only create a new profile if we couldn't claim a pending one
-            console.log(`No pending profile found, creating new profile for user ${userId} with email ${email}`);
-            await createProfileAction({ 
-              userId,
-              email
-            });
-          } else {
-            console.log(`Successfully claimed pending profile for user ${userId} with email ${email}`);
-          }
+          // Create profile with email
+          console.log(`Creating new profile for user ${userId} with email ${email}`);
+          await createProfileAction({ 
+            userId,
+            email
+          });
         } else {
           // No email available, create a basic profile
           console.log(`Creating basic profile for user ${userId} with no email`);

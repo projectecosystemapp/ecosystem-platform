@@ -54,7 +54,6 @@ logs
 .cache/
 
 # API Routes
-app/api/whop/
 app/api/stripe/
 app/api/user/
 
@@ -78,8 +77,7 @@ components/welcome-message-popup.tsx
 
 # Library Files
 lib/stripe.ts
-lib/utils.ts
-lib/whop.ts 
+lib/utils.ts 
 
 # Database
 db/schema/profiles-schema.ts
@@ -88,7 +86,6 @@ db/queries/profiles-queries.ts
 db/queries/pending-profiles-queries.ts
 
 #Actions
-actions/whop-actions.ts
 actions/stripe-actions.ts
 actions/pending-profiles-actions.ts
 actions/profiles-actions.ts
