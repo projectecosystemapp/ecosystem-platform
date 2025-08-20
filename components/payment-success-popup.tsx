@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Check, Gift, Sparkles, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -43,7 +43,7 @@ export default function PaymentSuccessPopup({ profile: initialProfile }: Payment
   const { userId } = useAuth();
   
   // Function to refresh profile data using server action
-  const refreshProfileData = async () => {
+  const refreshProfileData = useCallback(async () => {
     try {
       setIsLoading(true);
 
@@ -88,7 +88,7 @@ export default function PaymentSuccessPopup({ profile: initialProfile }: Payment
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId, retryCount]);
   
   // Set this popup as the active popup when shown to prevent other popups
   useEffect(() => {

@@ -1,8 +1,6 @@
 "use client";
 
 import { SignUp } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
-import { useTheme } from "next-themes";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { claimPendingProfile } from "@/actions/whop-actions";
@@ -21,7 +19,6 @@ import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
  * 4. Showing success/error messages appropriately
  */
 export default function SignUpPage() {
-  const { theme } = useTheme();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { isLoaded, signUp } = useSignUp();
@@ -152,7 +149,6 @@ export default function SignUpPage() {
       {!signupComplete && (
         <SignUp 
           appearance={{ 
-            baseTheme: theme === "dark" ? dark : undefined,
             elements: {
               rootBox: "w-full",
               card: "shadow-md rounded-lg"
