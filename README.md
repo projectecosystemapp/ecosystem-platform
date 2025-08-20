@@ -1,6 +1,6 @@
-# CodeSpring Boilerplate
+# Ecosystem Platform 🌟
 
-A modern full-stack starter built with Next.js 14, Tailwind CSS, ShadCN UI, Supabase, Drizzle ORM, Clerk authentication and Stripe payments.
+A modern two-sided marketplace connecting service providers with customers. Built with Next.js 14, TypeScript, Supabase, and Stripe Connect for seamless bookings and payments.
 
 ---
 
