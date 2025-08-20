@@ -12,6 +12,9 @@ import { revalidatePath } from "next/cache";
 import CancellationPopup from "@/components/cancellation-popup";
 import WelcomeMessagePopup from "@/components/welcome-message-popup";
 import PaymentSuccessPopup from "@/components/payment-success-popup";
+import { providersTable } from "@/db/schema/providers-schema";
+import { db } from "@/db/db";
+import { eq } from "drizzle-orm";
 
 /**
  * Check if a free user with an expired billing cycle needs their credits downgraded
@@ -87,6 +90,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const user = await currentUser();
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
   
+  // Check if user is a provider
+  const [provider] = await db
+    .select()
+    .from(providersTable)
+    .where(eq(providersTable.userId, userId))
+    .limit(1);
+  
   // Log profile details for debugging
   console.log('Dashboard profile:', {
     userId: profile.userId,
@@ -111,7 +121,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       {/* Sidebar component with profile data and user email */}
       <Sidebar 
         profile={profile} 
-        userEmail={userEmail} 
+        userEmail={userEmail}
+        isProvider={!!provider}
       />
       
       {/* Main content area */}
