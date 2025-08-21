@@ -16,7 +16,12 @@
     "supabase:stop": "npx supabase stop",
     "supabase:status": "npx supabase status",
     "supabase:types": "npx supabase gen types typescript --local > types/database.types.ts",
-    "storage:setup": "node scripts/setup-storage.mjs"
+    "storage:setup": "node scripts/setup-storage.mjs",
+    "stripe:setup": "./scripts/setup-stripe.sh",
+    "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhooks",
+    "stripe:listen:connect": "stripe listen --forward-to localhost:3000/api/stripe/connect/webhooks --events account.updated,payment_intent.succeeded,payment_intent.payment_failed",
+    "stripe:trigger:payment": "stripe trigger payment_intent.succeeded",
+    "stripe:logs": "stripe logs tail"
   },
   "dependencies": {
     "@clerk/backend": "^1.9.0",
@@ -50,6 +55,8 @@
     "@radix-ui/react-toggle": "^1.1.0",
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.2",
+    "@stripe/react-stripe-js": "^3.9.1",
+    "@stripe/stripe-js": "^7.8.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.55.0",
     "canvas-confetti": "^1.9.3",

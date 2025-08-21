@@ -24,6 +24,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BookingCalendar } from "./BookingCalendar";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { BookingSummary } from "./BookingSummary";
+import { StripeWrapper } from "@/components/payment/StripeWrapper";
 import { createBookingAction } from "@/actions/bookings-actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -72,6 +73,7 @@ export function BookingFlow({
   const [customerNotes, setCustomerNotes] = useState("");
   const [isBooking, setIsBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
 
   // Calculate step progress
   const steps: BookingStep[] = selectedService 
@@ -185,13 +187,9 @@ export function BookingFlow({
       });
 
       if (result.isSuccess && result.data) {
-        toast.success("Booking created! Redirecting to payment...");
-        
-        // TODO: Integrate with Stripe payment
-        // For now, just show success and redirect to dashboard
-        setTimeout(() => {
-          router.push("/dashboard/customer/bookings");
-        }, 1500);
+        toast.success("Booking created! Proceeding to payment...");
+        setCreatedBookingId(result.data.id);
+        handleNext(); // Move to payment step
       } else {
         setBookingError(result.message || "Failed to create booking");
         toast.error(result.message || "Failed to create booking");
@@ -203,6 +201,16 @@ export function BookingFlow({
     } finally {
       setIsBooking(false);
     }
+  };
+
+  const handlePaymentSuccess = () => {
+    toast.success("Payment successful! Your booking is confirmed.");
+    router.push("/dashboard/customer/bookings?payment=success");
+  };
+
+  const handlePaymentError = (error: string) => {
+    setBookingError(error);
+    console.error("Payment error:", error);
   };
 
   const slideVariants = {
@@ -374,12 +382,29 @@ export function BookingFlow({
               )}
             </div>
           )}
+
+          {/* Payment Step */}
+          {currentStep === "payment" && createdBookingId && selectedService && (
+            <div className="space-y-4">
+              <StripeWrapper
+                bookingId={createdBookingId}
+                booking={{
+                  id: createdBookingId,
+                  serviceName: selectedService.name,
+                  totalAmount: selectedService.price.toString(),
+                  providerName: provider.displayName,
+                }}
+                onSuccess={handlePaymentSuccess}
+                onError={handlePaymentError}
+              />
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
 
       {/* Navigation Buttons */}
       <div className="flex gap-3">
-        {currentStepIndex > 0 && (
+        {currentStepIndex > 0 && currentStep !== "payment" && (
           <Button
             variant="outline"
             onClick={handleBack}
@@ -391,16 +416,7 @@ export function BookingFlow({
           </Button>
         )}
         
-        {currentStep !== "confirm" ? (
-          <Button
-            onClick={handleNext}
-            disabled={!canProceed() || isBooking}
-            className="flex-1 bg-blue-600 hover:bg-blue-700"
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        ) : (
+        {currentStep === "confirm" ? (
           <Button
             onClick={handleCreateBooking}
             disabled={isBooking}
@@ -414,6 +430,18 @@ export function BookingFlow({
                 Proceed to Payment
               </>
             )}
+          </Button>
+        ) : currentStep === "payment" ? (
+          // Payment step - no navigation buttons, handled by Stripe form
+          null
+        ) : (
+          <Button
+            onClick={handleNext}
+            disabled={!canProceed() || isBooking}
+            className="flex-1 bg-blue-600 hover:bg-blue-700"
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         )}
       </div>
