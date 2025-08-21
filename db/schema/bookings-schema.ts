@@ -13,7 +13,7 @@ export const bookingStatus = {
 export const bookingsTable = pgTable("bookings", {
   id: uuid("id").primaryKey().defaultRandom(),
   providerId: uuid("provider_id").notNull(), // Will add foreign key constraint in migration
-  customerId: uuid("customer_id").notNull(), // Will add foreign key constraint in migration
+  customerId: text("customer_id").notNull(), // Will add foreign key constraint in migration
   
   // Service details
   serviceName: text("service_name").notNull(),
@@ -40,7 +40,7 @@ export const bookingsTable = pgTable("bookings", {
   customerNotes: text("customer_notes"),
   providerNotes: text("provider_notes"),
   cancellationReason: text("cancellation_reason"),
-  cancelledBy: uuid("cancelled_by"), // Will add foreign key constraint in migration
+  cancelledBy: text("cancelled_by"), // Will add foreign key constraint in migration
   cancelledAt: timestamp("cancelled_at"),
   
   // Timestamps

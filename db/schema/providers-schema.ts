@@ -3,7 +3,7 @@ import { pgTable, text, uuid, timestamp, numeric, boolean, jsonb, integer } from
 // Main providers table
 export const providersTable = pgTable("providers", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull().unique(), // Will add foreign key constraint in migration
+  userId: text("user_id").notNull().unique(), // Will add foreign key constraint in migration
   
   // Display information
   displayName: text("display_name").notNull(),

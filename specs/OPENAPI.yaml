@@ -1,0 +1,1082 @@
+openapi: 3.0.3
+info:
+  title: Ecosystem Marketplace API
+  description: |
+    Production-grade API specification for the Ecosystem marketplace platform.
+    This API powers the discovery, booking, and management of service providers.
+  version: 1.0.0
+  contact:
+    name: Ecosystem Support
+    email: api@ecosystem.com
+  license:
+    name: Proprietary
+    
+servers:
+  - url: https://api.ecosystem.com/v1
+    description: Production server
+  - url: https://staging-api.ecosystem.com/v1
+    description: Staging server
+  - url: http://localhost:3000/api
+    description: Local development
+
+security:
+  - BearerAuth: []
+  - ClerkAuth: []
+
+tags:
+  - name: Providers
+    description: Service provider operations
+  - name: Bookings
+    description: Booking management
+  - name: Webhooks
+    description: External webhook endpoints
+  - name: Search
+    description: Search and discovery
+
+paths:
+  /api/providers:
+    get:
+      tags:
+        - Providers
+      summary: List and search providers
+      description: |
+        Returns a paginated list of active service providers with advanced filtering.
+        Results are ordered by relevance when searching, or by rating when browsing.
+      parameters:
+        - name: q
+          in: query
+          description: Full-text search query
+          schema:
+            type: string
+            example: "yoga instructor"
+        - name: category
+          in: query
+          description: Filter by service category slug
+          schema:
+            type: string
+            example: "fitness"
+        - name: location
+          in: query
+          description: City, state, or coordinates (lat,lng,radius)
+          schema:
+            type: string
+            examples:
+              city:
+                value: "Austin, TX"
+              coordinates:
+                value: "30.2672,-97.7431,10mi"
+        - name: price_min
+          in: query
+          description: Minimum hourly rate in cents
+          schema:
+            type: integer
+            minimum: 0
+            example: 5000
+        - name: price_max
+          in: query
+          description: Maximum hourly rate in cents
+          schema:
+            type: integer
+            example: 20000
+        - name: rating_min
+          in: query
+          description: Minimum average rating (1-5)
+          schema:
+            type: number
+            minimum: 1
+            maximum: 5
+            example: 4.0
+        - name: availability
+          in: query
+          description: Filter by availability
+          schema:
+            type: string
+            enum: [today, tomorrow, this_week, weekends, evenings]
+        - name: verified_only
+          in: query
+          description: Only show verified providers
+          schema:
+            type: boolean
+            default: false
+        - name: sort
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [relevance, rating, price_asc, price_desc, distance, newest]
+            default: relevance
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Results per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - providers
+                  - pagination
+                  - filters
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProviderCard'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+                  filters:
+                    $ref: '#/components/schemas/ActiveFilters'
+                  facets:
+                    $ref: '#/components/schemas/SearchFacets'
+              examples:
+                success:
+                  value:
+                    providers:
+                      - id: "550e8400-e29b-41d4-a716-446655440000"
+                        slug: "sarah-johnson-yoga"
+                        display_name: "Sarah Johnson"
+                        tagline: "Certified Vinyasa & Yin Yoga Instructor"
+                        profile_image_url: "https://storage.ecosystem.com/providers/sarah.jpg"
+                        location_city: "Austin"
+                        location_state: "TX"
+                        hourly_rate: 7500
+                        currency: "USD"
+                        rating: 4.8
+                        review_count: 127
+                        is_verified: true
+                        services:
+                          - "Private Yoga Session"
+                          - "Group Classes"
+                          - "Corporate Wellness"
+                        next_available: "2024-01-15T10:00:00Z"
+                        distance_miles: 2.3
+                    pagination:
+                      current_page: 1
+                      total_pages: 5
+                      total_results: 89
+                      has_next: true
+                      has_previous: false
+                    filters:
+                      category: "fitness"
+                      location: "Austin, TX"
+                      price_range: [5000, 20000]
+                    facets:
+                      categories:
+                        - name: "Yoga"
+                          count: 45
+                        - name: "Personal Training"
+                          count: 32
+                      price_ranges:
+                        - label: "Under $50"
+                          count: 23
+                        - label: "$50-$100"
+                          count: 41
+                        - label: "$100+"
+                          count: 25
+                          
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/providers/{slug}:
+    get:
+      tags:
+        - Providers
+      summary: Get provider details
+      description: Returns complete provider profile including services, reviews, and availability preview
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          description: Provider's unique URL slug
+          schema:
+            type: string
+            example: "sarah-johnson-yoga"
+            
+      responses:
+        '200':
+          description: Provider found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderProfile'
+              examples:
+                complete_profile:
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    slug: "sarah-johnson-yoga"
+                    display_name: "Sarah Johnson"
+                    tagline: "Certified Vinyasa & Yin Yoga Instructor"
+                    bio: "With over 10 years of experience..."
+                    profile_image_url: "https://storage.ecosystem.com/providers/sarah.jpg"
+                    cover_image_url: "https://storage.ecosystem.com/providers/sarah-cover.jpg"
+                    location:
+                      city: "Austin"
+                      state: "TX"
+                      country: "US"
+                      coordinates:
+                        lat: 30.2672
+                        lng: -97.7431
+                    hourly_rate: 7500
+                    currency: "USD"
+                    years_experience: 10
+                    is_verified: true
+                    is_active: true
+                    rating: 4.8
+                    review_count: 127
+                    response_time_hours: 2
+                    completion_rate: 0.98
+                    member_since: "2020-01-15T00:00:00Z"
+                    services:
+                      - id: "service-1"
+                        name: "Private Yoga Session"
+                        description: "One-on-one personalized yoga"
+                        duration_minutes: 60
+                        price: 7500
+                        category: "yoga"
+                      - id: "service-2"
+                        name: "Group Class (up to 5)"
+                        description: "Small group yoga session"
+                        duration_minutes: 75
+                        price: 12000
+                        category: "yoga"
+                        max_attendees: 5
+                    gallery:
+                      - url: "https://storage.ecosystem.com/gallery/1.jpg"
+                        caption: "Studio space"
+                      - url: "https://storage.ecosystem.com/gallery/2.jpg"
+                        caption: "Group class in session"
+                    testimonials:
+                      - customer_name: "Emily R."
+                        text: "Sarah is an amazing instructor..."
+                        rating: 5
+                        date: "2023-12-01"
+                    recent_reviews:
+                      - id: "review-1"
+                        customer_name: "Michael T."
+                        rating: 5
+                        text: "Excellent session, very professional"
+                        created_at: "2024-01-10T14:30:00Z"
+                        provider_response: "Thank you Michael!"
+                        verified_booking: true
+                    availability_preview:
+                      next_7_days:
+                        - date: "2024-01-15"
+                          has_availability: true
+                          earliest_slot: "10:00"
+                          latest_slot: "18:00"
+                        - date: "2024-01-16"
+                          has_availability: true
+                          earliest_slot: "09:00"
+                          latest_slot: "17:00"
+                      typical_hours:
+                        monday: "9:00-17:00"
+                        tuesday: "9:00-17:00"
+                        wednesday: "9:00-17:00"
+                        thursday: "9:00-17:00"
+                        friday: "9:00-15:00"
+                        saturday: "10:00-14:00"
+                        sunday: null
+                        
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/providers/{slug}/availability:
+    get:
+      tags:
+        - Providers
+      summary: Get provider availability
+      description: Returns detailed availability slots for booking
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: service_id
+          in: query
+          required: true
+          description: Service to check availability for
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          required: true
+          description: Start date for availability check (ISO 8601)
+          schema:
+            type: string
+            format: date
+            example: "2024-01-15"
+        - name: end_date
+          in: query
+          required: true
+          description: End date for availability check (ISO 8601)
+          schema:
+            type: string
+            format: date
+            example: "2024-01-22"
+        - name: timezone
+          in: query
+          description: Client timezone for slot display
+          schema:
+            type: string
+            default: "America/Chicago"
+            example: "America/New_York"
+            
+      responses:
+        '200':
+          description: Availability retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider_id:
+                    type: string
+                  service_id:
+                    type: string
+                  timezone:
+                    type: string
+                  availability:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        slots:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              start_time:
+                                type: string
+                                format: time
+                                example: "09:00"
+                              end_time:
+                                type: string
+                                format: time
+                                example: "10:00"
+                              is_available:
+                                type: boolean
+                              reason_unavailable:
+                                type: string
+                                enum: [booked, blocked, outside_hours]
+              examples:
+                with_availability:
+                  value:
+                    provider_id: "550e8400-e29b-41d4-a716-446655440000"
+                    service_id: "service-1"
+                    timezone: "America/Chicago"
+                    availability:
+                      - date: "2024-01-15"
+                        slots:
+                          - start_time: "09:00"
+                            end_time: "10:00"
+                            is_available: true
+                          - start_time: "10:00"
+                            end_time: "11:00"
+                            is_available: false
+                            reason_unavailable: "booked"
+                          - start_time: "11:00"
+                            end_time: "12:00"
+                            is_available: true
+                            
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/bookings:
+    post:
+      tags:
+        - Bookings
+      summary: Create a booking
+      description: |
+        Creates a new booking and initiates payment processing.
+        This endpoint is idempotent when called with the same idempotency key.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Unique key to prevent duplicate bookings
+          schema:
+            type: string
+            example: "booking-550e8400-e29b-41d4-1234567890"
+            
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - provider_id
+                - service_id
+                - booking_date
+                - start_time
+                - payment_method_id
+              properties:
+                provider_id:
+                  type: string
+                  format: uuid
+                service_id:
+                  type: string
+                  format: uuid
+                booking_date:
+                  type: string
+                  format: date
+                start_time:
+                  type: string
+                  format: time
+                customer_notes:
+                  type: string
+                  maxLength: 500
+                payment_method_id:
+                  type: string
+                  description: Stripe payment method ID
+                save_payment_method:
+                  type: boolean
+                  default: false
+                metadata:
+                  type: object
+                  description: Additional booking metadata
+            examples:
+              simple_booking:
+                value:
+                  provider_id: "550e8400-e29b-41d4-a716-446655440000"
+                  service_id: "service-1"
+                  booking_date: "2024-01-20"
+                  start_time: "14:00"
+                  customer_notes: "First time, please go easy!"
+                  payment_method_id: "pm_1234567890"
+                  save_payment_method: true
+                  
+      responses:
+        '201':
+          description: Booking created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+              examples:
+                created:
+                  value:
+                    id: "booking-123"
+                    provider_id: "550e8400-e29b-41d4-a716-446655440000"
+                    customer_id: "customer-456"
+                    service:
+                      id: "service-1"
+                      name: "Private Yoga Session"
+                      duration_minutes: 60
+                      price: 7500
+                    booking_date: "2024-01-20"
+                    start_time: "14:00"
+                    end_time: "15:00"
+                    status: "pending"
+                    total_amount: 7500
+                    platform_fee: 1125
+                    provider_payout: 6375
+                    payment_status: "authorized"
+                    confirmation_code: "ECO-2024-0120-ABC123"
+                    created_at: "2024-01-15T10:30:00Z"
+                    
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                slot_unavailable:
+                  value:
+                    error: "SLOT_UNAVAILABLE"
+                    message: "The selected time slot is no longer available"
+                invalid_payment:
+                  value:
+                    error: "PAYMENT_FAILED"
+                    message: "Payment authorization failed"
+                    
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Conflict - slot already booked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/bookings/{id}/cancel:
+    post:
+      tags:
+        - Bookings
+      summary: Cancel a booking
+      description: |
+        Cancels an existing booking and processes refund according to cancellation policy.
+        Refund amount depends on time until booking and cancellation reason.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  enum: [customer_request, provider_unavailable, emergency, other]
+                details:
+                  type: string
+                  maxLength: 500
+            examples:
+              customer_cancel:
+                value:
+                  reason: "customer_request"
+                  details: "Schedule conflict came up"
+                  
+      responses:
+        '200':
+          description: Booking cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [cancelled]
+                  refund_amount:
+                    type: integer
+                    description: Refund amount in cents
+                  refund_status:
+                    type: string
+                    enum: [pending, processing, completed, not_applicable]
+                  cancellation_fee:
+                    type: integer
+                    description: Fee charged for cancellation
+                  cancelled_at:
+                    type: string
+                    format: date-time
+              examples:
+                full_refund:
+                  value:
+                    booking_id: "booking-123"
+                    status: "cancelled"
+                    refund_amount: 7500
+                    refund_status: "processing"
+                    cancellation_fee: 0
+                    cancelled_at: "2024-01-15T10:30:00Z"
+                partial_refund:
+                  value:
+                    booking_id: "booking-123"
+                    status: "cancelled"
+                    refund_amount: 3750
+                    refund_status: "processing"
+                    cancellation_fee: 3750
+                    cancelled_at: "2024-01-19T10:30:00Z"
+                    
+        '400':
+          description: Cannot cancel booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                already_completed:
+                  value:
+                    error: "INVALID_STATUS"
+                    message: "Cannot cancel a completed booking"
+                    
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not authorized to cancel this booking
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/webhooks/stripe:
+    post:
+      tags:
+        - Webhooks
+      summary: Handle Stripe webhooks
+      description: |
+        Processes Stripe webhook events for payment lifecycle.
+        Requires valid Stripe signature for security.
+      security: []  # No auth required, uses signature verification
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          schema:
+            type: string
+            
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                object:
+                  type: string
+                api_version:
+                  type: string
+                created:
+                  type: integer
+                data:
+                  type: object
+                  properties:
+                    object:
+                      type: object
+                      description: The Stripe object (PaymentIntent, Charge, etc.)
+                livemode:
+                  type: boolean
+                pending_webhooks:
+                  type: integer
+                request:
+                  type: object
+                type:
+                  type: string
+                  enum:
+                    - payment_intent.succeeded
+                    - payment_intent.payment_failed
+                    - payment_intent.canceled
+                    - charge.succeeded
+                    - charge.failed
+                    - charge.refunded
+                    - charge.dispute.created
+                    - transfer.created
+                    - transfer.failed
+                    - payout.created
+                    - payout.failed
+            examples:
+              payment_succeeded:
+                value:
+                  id: "evt_1234567890"
+                  object: "event"
+                  api_version: "2023-10-16"
+                  created: 1705320000
+                  data:
+                    object:
+                      id: "pi_1234567890"
+                      object: "payment_intent"
+                      amount: 7500
+                      currency: "usd"
+                      status: "succeeded"
+                      metadata:
+                        booking_id: "booking-123"
+                        provider_id: "provider-456"
+                        customer_id: "customer-789"
+                  livemode: true
+                  pending_webhooks: 1
+                  type: "payment_intent.succeeded"
+                  
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                    example: true
+                    
+        '400':
+          description: Invalid webhook signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid_signature:
+                  value:
+                    error: "INVALID_SIGNATURE"
+                    message: "Webhook signature verification failed"
+                    
+        '409':
+          description: Duplicate webhook (already processed)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Event already processed"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ClerkAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Clerk session token
+
+  schemas:
+    ProviderCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        display_name:
+          type: string
+        tagline:
+          type: string
+        profile_image_url:
+          type: string
+        location_city:
+          type: string
+        location_state:
+          type: string
+        hourly_rate:
+          type: integer
+        currency:
+          type: string
+        rating:
+          type: number
+        review_count:
+          type: integer
+        is_verified:
+          type: boolean
+        services:
+          type: array
+          items:
+            type: string
+        next_available:
+          type: string
+          format: date-time
+        distance_miles:
+          type: number
+
+    ProviderProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        display_name:
+          type: string
+        tagline:
+          type: string
+        bio:
+          type: string
+        profile_image_url:
+          type: string
+        cover_image_url:
+          type: string
+        location:
+          type: object
+          properties:
+            city:
+              type: string
+            state:
+              type: string
+            country:
+              type: string
+            coordinates:
+              type: object
+              properties:
+                lat:
+                  type: number
+                lng:
+                  type: number
+        hourly_rate:
+          type: integer
+        currency:
+          type: string
+        years_experience:
+          type: integer
+        is_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        rating:
+          type: number
+        review_count:
+          type: integer
+        response_time_hours:
+          type: number
+        completion_rate:
+          type: number
+        member_since:
+          type: string
+          format: date-time
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/Service'
+        gallery:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+              caption:
+                type: string
+        testimonials:
+          type: array
+          items:
+            $ref: '#/components/schemas/Testimonial'
+        recent_reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/Review'
+        availability_preview:
+          type: object
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        duration_minutes:
+          type: integer
+        price:
+          type: integer
+        currency:
+          type: string
+        category:
+          type: string
+        max_attendees:
+          type: integer
+
+    Testimonial:
+      type: object
+      properties:
+        customer_name:
+          type: string
+        text:
+          type: string
+        rating:
+          type: integer
+        date:
+          type: string
+          format: date
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+        customer_name:
+          type: string
+        rating:
+          type: integer
+        text:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        provider_response:
+          type: string
+        verified_booking:
+          type: boolean
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+        provider_id:
+          type: string
+        customer_id:
+          type: string
+        service:
+          type: object
+        booking_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+        end_time:
+          type: string
+        status:
+          type: string
+        total_amount:
+          type: integer
+        platform_fee:
+          type: integer
+        provider_payout:
+          type: integer
+        payment_status:
+          type: string
+        confirmation_code:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        total_pages:
+          type: integer
+        total_results:
+          type: integer
+        has_next:
+          type: boolean
+        has_previous:
+          type: boolean
+
+    ActiveFilters:
+      type: object
+      properties:
+        category:
+          type: string
+        location:
+          type: string
+        price_range:
+          type: array
+          items:
+            type: integer
+
+    SearchFacets:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              count:
+                type: integer
+        price_ranges:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              count:
+                type: integer
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        request_id:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+            
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+            
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+            
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+            
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+            
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

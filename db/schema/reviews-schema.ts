@@ -5,7 +5,7 @@ export const reviewsTable = pgTable("reviews", {
   id: uuid("id").primaryKey().defaultRandom(),
   bookingId: uuid("booking_id").notNull().unique(), // Will add foreign key constraint in migration
   providerId: uuid("provider_id").notNull(), // Will add foreign key constraint in migration
-  customerId: uuid("customer_id").notNull(), // Will add foreign key constraint in migration
+  customerId: text("customer_id").notNull(), // Will add foreign key constraint in migration
   
   // Rating and review
   rating: integer("rating").notNull(), // 1-5 stars

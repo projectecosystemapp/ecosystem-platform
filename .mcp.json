@@ -28,52 +28,12 @@
       ],
       "env": {}
     },
-    "postgres": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-postgres"
-      ],
-      "env": {
-        "PG_CONNECTION_STRING": "${PG_READONLY_URL}"
-      }
-    },
-    "playwright": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-playwright"
-      ],
-      "env": {}
-    },
     "github": {
       "type": "stdio",
       "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-github"
-      ],
-      "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-      }
-    },
-    "serena": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "serena-mcp"
-      ],
-      "env": {}
-    },
-    "context7": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "context7-mcp"
       ],
       "env": {}
     }
