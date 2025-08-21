@@ -31,8 +31,15 @@ export async function POST(req: NextRequest) {
 
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err: any) {
-    console.error(`Connect Webhook Error: ${err.message}`);
-    return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
+    // Log detailed error server-side for debugging
+    console.error(`Connect Webhook Error:`, {
+      message: err.message,
+      stack: err.stack,
+      signature: sig ? 'present' : 'missing',
+      webhookSecret: webhookSecret ? 'configured' : 'missing'
+    });
+    // Return generic error to prevent information leakage
+    return new NextResponse("Invalid webhook request", { status: 400 });
   }
 
   if (relevantEvents.has(event.type)) {
@@ -64,8 +71,14 @@ export async function POST(req: NextRequest) {
           console.log(`Unhandled event type: ${event.type}`);
       }
     } catch (error) {
-      console.error("Connect webhook handler failed:", error);
-      return new NextResponse("Webhook handler failed", { status: 400 });
+      // Log detailed error for internal monitoring
+      console.error("Connect webhook handler failed:", {
+        eventType: event.type,
+        eventId: event.id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Return generic response to maintain security
+      return new NextResponse("Webhook processing error", { status: 500 });
     }
   }
 
