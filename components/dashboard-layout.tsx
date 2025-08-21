@@ -1,5 +1,5 @@
 /**
- * Dashboard layout component for Template App
+ * Dashboard layout component for ECOSYSTEM Marketplace
  * Provides a consistent layout structure for all dashboard pages
  * Features a sidebar navigation and main content area
  */
@@ -33,4 +33,4 @@ export default function DashboardLayout({ profile, children, title }: DashboardL
       </div>
     </div>
   );
-} 
+}

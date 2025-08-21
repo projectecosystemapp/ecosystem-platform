@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import Image from 'next/image'
 import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -171,10 +172,11 @@ export function ImageUpload({
       >
         {preview ? (
           <>
-            <img
+            <Image
               src={preview}
               alt="Upload preview"
-              className="h-full w-full object-cover"
+              fill
+              className="object-cover"
             />
             {!disabled && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity hover:opacity-100">
@@ -350,10 +352,11 @@ export function GalleryUpload({
             <div key={index} className="relative aspect-square">
               {imageUrl ? (
                 <div className="group relative h-full w-full overflow-hidden rounded-lg border">
-                  <img
+                  <Image
                     src={imageUrl}
                     alt={`Gallery image ${index + 1}`}
-                    className="h-full w-full object-cover"
+                    fill
+                    className="object-cover"
                   />
                   {!disabled && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">

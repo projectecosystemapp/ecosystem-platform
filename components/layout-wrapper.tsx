@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Layout Wrapper component for Template App
+ * Layout Wrapper component for ECOSYSTEM Marketplace
  * Controls when to show the header based on the current URL path
  * Prevents header from appearing on dashboard pages
  */
@@ -27,4 +27,4 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
       </main>
     </>
   );
-} 
+}

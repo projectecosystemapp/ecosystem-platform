@@ -1,5 +1,5 @@
 /**
- * Settings page for the Template App dashboard
+ * Settings page for the ECOSYSTEM Marketplace dashboard
  * Allows users to configure their account and application settings
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,4 +23,4 @@ export default function SettingsPage() {
       </div>
     </main>
   );
-} 
+}

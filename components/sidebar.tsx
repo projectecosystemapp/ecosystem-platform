@@ -1,5 +1,5 @@
 /**
- * Sidebar component for the Template App
+ * Sidebar component for the ECOSYSTEM Marketplace
  * Provides primary navigation for the dashboard with a clean, modern UI
  * Features user avatar at the bottom and billing management option
  */
@@ -264,4 +264,4 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
       </div>
     </>
   );
-} 
+}

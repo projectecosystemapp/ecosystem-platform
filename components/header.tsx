@@ -1,5 +1,5 @@
 /**
- * Header component for the Template App
+ * Header component for the ECOSYSTEM Marketplace
  * Features a modern glassmorphism design with bento-style UI elements
  * Includes subtle 3D effects and glowing accents
  */
@@ -107,7 +107,7 @@ export default function Header() {
                 </svg>
               </div>
               <div className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                Template App
+                ECOSYSTEM
               </div>
             </motion.div>
 

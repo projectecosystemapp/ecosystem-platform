@@ -6,8 +6,11 @@ import { bookingsTable } from "@/db/schema/bookings-schema";
 import { providersTable } from "@/db/schema/providers-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and } from "drizzle-orm";
+import { withRateLimitRedis } from "@/lib/rate-limit-redis";
 
-export async function POST(req: NextRequest) {
+export const POST = withRateLimitRedis(
+  { type: "payment" },
+  async (req: NextRequest) => {
   try {
     const { userId } = auth();
     
@@ -102,4 +105,5 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+  }
+);

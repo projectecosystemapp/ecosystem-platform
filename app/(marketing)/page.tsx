@@ -1,6 +1,6 @@
 /**
- * Landing page for Template App
- * Modern and attractive marketing page showcasing the app's features
+ * Landing page for ECOSYSTEM Marketplace
+ * Modern and attractive marketing page showcasing the platform's features
  * Uses ShadCN components for consistent styling and separate client components for animations
  */
 import { Button } from "@/components/ui/button";
@@ -84,7 +84,7 @@ export default function HomePage() {
         <div className="container mx-auto max-w-6xl">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="md:col-span-2">
-              <h3 className="text-lg font-semibold mb-4">Template App</h3>
+              <h3 className="text-lg font-semibold mb-4">ECOSYSTEM</h3>
               <p className="text-muted-foreground max-w-md">
                 Build beautiful, functional web applications faster than ever with our comprehensive template solution.
               </p>
@@ -127,7 +127,7 @@ export default function HomePage() {
           
           <div className="border-t mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
             <p className="text-muted-foreground text-sm mb-4 md:mb-0">
-              © {new Date().getFullYear()} Template App. All rights reserved.
+              © {new Date().getFullYear()} ECOSYSTEM. All rights reserved.
             </p>
             <div className="flex space-x-6">
               <Link href="#" className="text-muted-foreground text-sm hover:text-foreground transition-colors">Privacy Policy</Link>

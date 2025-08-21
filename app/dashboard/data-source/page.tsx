@@ -1,5 +1,5 @@
 /**
- * Data Source page for the Template App dashboard
+ * Data Source page for the ECOSYSTEM Marketplace dashboard
  * Allows users to configure and manage their data sources
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,4 +23,4 @@ export default function DataSourcePage() {
       </div>
     </main>
   );
-} 
+}

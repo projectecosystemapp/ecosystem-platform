@@ -180,7 +180,7 @@ export default function CheckoutSuccessPage() {
         {/* Next Steps */}
         <Card>
           <CardHeader>
-            <CardTitle>What's Next?</CardTitle>
+            <CardTitle>What&apos;s Next?</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">

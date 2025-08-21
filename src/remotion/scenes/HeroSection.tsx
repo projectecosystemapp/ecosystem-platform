@@ -67,7 +67,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({progress, fadeOut}) => 
 					fontFamily: 'system-ui, -apple-system, sans-serif',
 				}}
 			>
-				Your Ultimate <span style={{color: '#3b82f6'}}>Template App</span>
+				Your Ultimate <span style={{color: '#3b82f6'}}>ECOSYSTEM</span> Marketplace
 			</h1>
 
 			{/* Subtitle */}

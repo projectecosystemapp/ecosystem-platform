@@ -1,5 +1,5 @@
 /**
- * Targets page for the Template App dashboard
+ * Targets page for the ECOSYSTEM Marketplace dashboard
  * Allows users to set and manage their targets and goals
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,4 +35,4 @@ export default function TargetsPage() {
       </div>
     </main>
   );
-} 
+}

@@ -80,7 +80,7 @@ async function handleCheckoutSession(event: Stripe.Event) {
 
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ["default_payment_method"]
-    });
+    }) as any; // Type assertion needed due to Stripe SDK type mismatch
 
     const productId = subscription.items.data[0].price.product as string;
     await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId);
@@ -111,10 +111,11 @@ async function handlePaymentSuccess(event: Stripe.Event) {
   const invoice = event.data.object as Stripe.Invoice;
   const customerId = invoice.customer as string;
   
-  if (invoice.subscription) {
+  const subscriptionId = (invoice as any).subscription as string | null;
+  if (subscriptionId) {
     try {
       // Get the subscription to determine billing cycle dates
-      const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any; // Type assertion needed due to Stripe SDK type mismatch
       
       const billingCycleStart = new Date(subscription.current_period_start * 1000);
       const billingCycleEnd = new Date(subscription.current_period_end * 1000);

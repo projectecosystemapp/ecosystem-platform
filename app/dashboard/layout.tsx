@@ -1,5 +1,5 @@
 /**
- * Dashboard layout for Template App
+ * Dashboard layout for ECOSYSTEM Marketplace
  * This layout removes the global header from all dashboard pages
  * and applies the dashboard-specific styling
  */
@@ -131,4 +131,4 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       </div>
     </div>
   );
-} 
+}

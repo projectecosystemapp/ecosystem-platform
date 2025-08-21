@@ -1,5 +1,5 @@
 /**
- * Dashboard page for Template App
+ * Dashboard page for ECOSYSTEM Marketplace
  * Displays the main dashboard interface for authenticated users
  * Features a sidebar navigation and content area
  * Requires a paid membership to access
@@ -53,4 +53,4 @@ export default function DashboardPage() {
       </div>
     </main>
   );
-} 
+}

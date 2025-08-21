@@ -1,5 +1,5 @@
 /**
- * Members page for the Template App dashboard
+ * Members page for the ECOSYSTEM Marketplace dashboard
  * Displays and manages team members and permissions
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,4 +23,4 @@ export default function MembersPage() {
       </div>
     </main>
   );
-} 
+}

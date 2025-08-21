@@ -160,7 +160,7 @@ export const CTASection: React.FC<CTASectionProps> = ({progress}) => {
 						fontFamily: 'system-ui, -apple-system, sans-serif',
 					}}
 				>
-					Template App
+					ECOSYSTEM
 				</div>
 			</div>
 		</AbsoluteFill>

@@ -13,8 +13,8 @@ import { createProfileAction } from "@/actions/profiles-actions";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Template App",
-  description: "A full-stack template for modern web applications."
+  title: "ECOSYSTEM Marketplace",
+  description: "A modern two-sided marketplace connecting service providers with customers."
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
