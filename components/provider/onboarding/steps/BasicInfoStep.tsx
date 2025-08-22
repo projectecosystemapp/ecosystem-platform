@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { InfoIcon } from "lucide-react";
 
 export default function BasicInfoStep() {
-  const { basicInfo, updateBasicInfo, stepValidation, currentStep } = useProviderOnboardingStore();
+  const { basicInfo, locationInfo, updateBasicInfo, updateLocationInfo, stepValidation, currentStep } = useProviderOnboardingStore();
   const validation = stepValidation[currentStep];
 
   return (
@@ -34,7 +34,7 @@ export default function BasicInfoStep() {
           </Label>
           <Input
             id="displayName"
-            value={basicInfo.displayName}
+            value={basicInfo.displayName || ''}
             onChange={(e) => updateBasicInfo({ displayName: e.target.value })}
             placeholder="John Smith"
             className={validation?.errors?.displayName ? "border-red-500" : ""}
@@ -55,7 +55,7 @@ export default function BasicInfoStep() {
           </Label>
           <Input
             id="tagline"
-            value={basicInfo.tagline}
+            value={basicInfo.tagline || ''}
             onChange={(e) => updateBasicInfo({ tagline: e.target.value })}
             placeholder="Experienced plumber specializing in residential repairs"
             maxLength={200}
@@ -64,7 +64,7 @@ export default function BasicInfoStep() {
             required
           />
           <p className="text-sm text-gray-500 mt-1">
-            {basicInfo.tagline.length}/200 characters
+            {(basicInfo.tagline?.length || 0)}/200 characters
           </p>
           {validation?.errors?.tagline && (
             <p id="tagline-error" className="text-sm text-red-500 mt-1">
@@ -80,7 +80,7 @@ export default function BasicInfoStep() {
           </Label>
           <Textarea
             id="bio"
-            value={basicInfo.bio}
+            value={basicInfo.bio || ''}
             onChange={(e) => updateBasicInfo({ bio: e.target.value })}
             placeholder="Tell potential customers about your experience, qualifications, and what makes you unique..."
             rows={5}
@@ -90,7 +90,7 @@ export default function BasicInfoStep() {
             required
           />
           <p className="text-sm text-gray-500 mt-1">
-            {basicInfo.bio.length}/2000 characters
+            {(basicInfo.bio?.length || 0)}/2000 characters
           </p>
           {validation?.errors?.bio && (
             <p id="bio-error" className="text-sm text-red-500 mt-1">
@@ -107,8 +107,8 @@ export default function BasicInfoStep() {
             </Label>
             <Input
               id="locationCity"
-              value={basicInfo.locationCity}
-              onChange={(e) => updateBasicInfo({ locationCity: e.target.value })}
+              value={locationInfo.city || ''}
+              onChange={(e) => updateLocationInfo({ city: e.target.value })}
               placeholder="San Francisco"
               className={validation?.errors?.locationCity ? "border-red-500" : ""}
               required
@@ -126,8 +126,8 @@ export default function BasicInfoStep() {
             </Label>
             <Input
               id="locationState"
-              value={basicInfo.locationState}
-              onChange={(e) => updateBasicInfo({ locationState: e.target.value })}
+              value={locationInfo.state || ''}
+              onChange={(e) => updateLocationInfo({ state: e.target.value })}
               placeholder="CA"
               className={validation?.errors?.locationState ? "border-red-500" : ""}
               required
@@ -143,15 +143,15 @@ export default function BasicInfoStep() {
         {/* Experience and Rate */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="yearsExperience">Years of Experience</Label>
+            <Label htmlFor="yearsOfExperience">Years of Experience</Label>
             <Input
-              id="yearsExperience"
+              id="yearsOfExperience"
               type="number"
               min="0"
               max="100"
-              value={basicInfo.yearsExperience || ""}
+              value={basicInfo.yearsOfExperience || ""}
               onChange={(e) => updateBasicInfo({ 
-                yearsExperience: e.target.value ? Number(e.target.value) : null 
+                yearsOfExperience: e.target.value ? Number(e.target.value) : undefined 
               })}
               placeholder="5"
             />
@@ -166,7 +166,7 @@ export default function BasicInfoStep() {
               max="1000"
               value={basicInfo.hourlyRate ? basicInfo.hourlyRate / 100 : ""}
               onChange={(e) => updateBasicInfo({ 
-                hourlyRate: e.target.value ? Number(e.target.value) * 100 : null 
+                hourlyRate: e.target.value ? Number(e.target.value) * 100 : undefined 
               })}
               placeholder="75"
             />

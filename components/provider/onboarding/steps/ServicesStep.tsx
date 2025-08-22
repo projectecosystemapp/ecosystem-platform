@@ -18,7 +18,7 @@ import { Plus, Trash2, Clock, DollarSign, InfoIcon } from "lucide-react";
 
 export default function ServicesStep() {
   const { 
-    services, 
+    servicesInfo, 
     addService, 
     updateService, 
     removeService, 
@@ -31,6 +31,7 @@ export default function ServicesStep() {
 
   const handleAddService = () => {
     addService({
+      id: Date.now().toString(), // Generate unique ID
       name: "",
       description: "",
       duration: 60,
@@ -50,7 +51,7 @@ export default function ServicesStep() {
 
       {/* Services List */}
       <div className="space-y-4">
-        {services.length === 0 && !isAdding ? (
+        {(!servicesInfo.services || servicesInfo.services.length === 0) && !isAdding ? (
           <Card className="border-dashed">
             <CardContent className="text-center py-8">
               <p className="text-gray-500 mb-4">No services added yet</p>
@@ -62,7 +63,7 @@ export default function ServicesStep() {
           </Card>
         ) : (
           <>
-            {services.map((service, index) => (
+            {servicesInfo.services && servicesInfo.services.map((service: any, index: number) => (
               <Card key={service.id}>
                 <CardContent className="p-4">
                   <div className="space-y-4">
@@ -174,7 +175,7 @@ export default function ServicesStep() {
             ))}
 
             {/* Add Service Button */}
-            {services.length < 20 && (
+            {servicesInfo.services && servicesInfo.services.length < 20 && (
               <Button
                 variant="outline"
                 onClick={handleAddService}

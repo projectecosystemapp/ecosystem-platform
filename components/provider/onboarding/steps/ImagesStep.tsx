@@ -108,7 +108,7 @@ export default function ImagesStep() {
                     className="object-cover"
                   />
                   <button
-                    onClick={() => updateImages({ profileImageUrl: null })}
+                    onClick={() => updateImages({ profileImageUrl: undefined })}
                     className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 m-1"
                     aria-label="Remove profile image"
                   >
@@ -170,7 +170,7 @@ export default function ImagesStep() {
                   className="object-cover"
                 />
                 <button
-                  onClick={() => updateImages({ coverImageUrl: null })}
+                  onClick={() => updateImages({ coverImageUrl: undefined })}
                   className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
                   aria-label="Remove cover image"
                 >

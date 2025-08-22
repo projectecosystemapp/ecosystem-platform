@@ -126,6 +126,15 @@ export interface AdditionalInfo {
 }
 
 /**
+ * Images information for profile and gallery
+ */
+export interface ImagesInfo {
+  profileImageUrl?: string;
+  coverImageUrl?: string;
+  galleryImages: string[];
+}
+
+/**
  * Validation state for each step
  */
 export interface StepValidation {
@@ -161,6 +170,7 @@ export interface ProviderOnboardingState {
   availabilityInfo: Partial<AvailabilityInfo>;
   paymentInfo: Partial<PaymentInfo>;
   additionalInfo: Partial<AdditionalInfo>;
+  images: ImagesInfo;
   
   // Validation states
   stepValidation: Record<OnboardingStep, StepValidation>;
@@ -178,6 +188,7 @@ export interface ProviderOnboardingState {
   updateAvailabilityInfo: (updates: Partial<AvailabilityInfo>) => void;
   updatePaymentInfo: (updates: Partial<PaymentInfo>) => void;
   updateAdditionalInfo: (updates: Partial<AdditionalInfo>) => void;
+  updateImages: (updates: Partial<ImagesInfo>) => void;
   
   // Service management
   addService: (service: ProviderService) => void;
@@ -191,6 +202,10 @@ export interface ProviderOnboardingState {
   // Portfolio management
   addPortfolioImage: (imageUrl: string) => void;
   removePortfolioImage: (index: number) => void;
+  
+  // Gallery management
+  addGalleryImage: (imageUrl: string) => void;
+  removeGalleryImage: (index: number) => void;
   
   // Navigation
   goToStep: (step: OnboardingStep) => void;
@@ -262,6 +277,11 @@ const initialState = {
     emergencyAvailable: false,
     backgroundCheckCompleted: false,
   },
+  images: {
+    profileImageUrl: undefined,
+    coverImageUrl: undefined,
+    galleryImages: [],
+  },
   stepValidation: {
     [OnboardingStep.BASIC_INFO]: initialValidation,
     [OnboardingStep.LOCATION]: initialValidation,
@@ -316,6 +336,11 @@ export const useProviderOnboardingStore = create<ProviderOnboardingState>()(
         updateAdditionalInfo: (updates: Partial<AdditionalInfo>) =>
           set((state) => {
             state.additionalInfo = { ...state.additionalInfo, ...updates };
+          }),
+          
+        updateImages: (updates: Partial<ImagesInfo>) =>
+          set((state) => {
+            state.images = { ...state.images, ...updates };
           }),
         
         // Service management
@@ -373,6 +398,20 @@ export const useProviderOnboardingStore = create<ProviderOnboardingState>()(
         removePortfolioImage: (index: number) =>
           set((state) => {
             state.additionalInfo.portfolio?.splice(index, 1);
+          }),
+        
+        // Gallery management
+        addGalleryImage: (imageUrl: string) =>
+          set((state) => {
+            if (!state.images.galleryImages) {
+              state.images.galleryImages = [];
+            }
+            state.images.galleryImages.push(imageUrl);
+          }),
+          
+        removeGalleryImage: (index: number) =>
+          set((state) => {
+            state.images.galleryImages?.splice(index, 1);
           }),
         
         // Navigation
@@ -547,6 +586,7 @@ export const useProviderOnboardingStore = create<ProviderOnboardingState>()(
           availabilityInfo: state.availabilityInfo,
           paymentInfo: state.paymentInfo,
           additionalInfo: state.additionalInfo,
+          images: state.images,
           currentStep: state.currentStep,
           completedSteps: state.completedSteps,
           providerId: state.providerId,
@@ -559,23 +599,25 @@ export const useProviderOnboardingStore = create<ProviderOnboardingState>()(
 // Export helper hooks
 export const useStepNavigation = () => {
   const currentStep = useProviderOnboardingStore((state) => state.currentStep);
-  const setCurrentStep = useProviderOnboardingStore((state) => state.setCurrentStep);
-  const nextStep = useProviderOnboardingStore((state) => state.nextStep);
-  const previousStep = useProviderOnboardingStore((state) => state.previousStep);
-  return { currentStep, setCurrentStep, nextStep, previousStep };
+  const goToStep = useProviderOnboardingStore((state) => state.goToStep);
+  const goToNextStep = useProviderOnboardingStore((state) => state.goToNextStep);
+  const goToPreviousStep = useProviderOnboardingStore((state) => state.goToPreviousStep);
+  return { currentStep, goToStep, goToNextStep, goToPreviousStep };
 };
 
 export const useCurrentStepValidation = () => {
-  const validateCurrentStep = useProviderOnboardingStore((state) => state.validateCurrentStep);
-  return validateCurrentStep;
+  const validateStep = useProviderOnboardingStore((state) => state.validateStep);
+  const currentStep = useProviderOnboardingStore((state) => state.currentStep);
+  return () => validateStep(currentStep);
 };
 
 export const useCanSubmitForm = () => {
-  const canSubmitForm = useProviderOnboardingStore((state) => state.canSubmitForm);
-  return canSubmitForm;
+  const canProceedToStep = useProviderOnboardingStore((state) => state.canProceedToStep);
+  const currentStep = useProviderOnboardingStore((state) => state.currentStep);
+  return canProceedToStep(currentStep + 1);
 };
 
 export const useOnboardingProgress = () => {
-  const getCompletionPercentage = useProviderOnboardingStore((state) => state.getCompletionPercentage);
-  return getCompletionPercentage;
+  const calculateCompletionPercentage = useProviderOnboardingStore((state) => state.calculateCompletionPercentage);
+  return calculateCompletionPercentage;
 };

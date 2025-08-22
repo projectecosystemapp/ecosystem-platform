@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useProviderOnboardingStore, OnboardingStep } from "@/lib/stores/provider-onboarding-store";
+import { useProviderOnboardingStore, OnboardingStep, ProviderService, WeeklyAvailability } from "@/lib/stores/provider-onboarding-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,15 +31,16 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export default function ReviewStep() {
   const {
     basicInfo,
-    services,
-    availability,
+    servicesInfo,
+    availabilityInfo,
+    locationInfo,
+    paymentInfo,
     images,
-    stripeStatus,
     goToStep,
     completedSteps,
   } = useProviderOnboardingStore();
 
-  const isComplete = (step: OnboardingStep) => completedSteps.has(step);
+  const isComplete = (step: OnboardingStep) => completedSteps.includes(step);
   
   const formatTime = (time: string) => {
     const [hour, minute] = time.split(":");
@@ -106,12 +107,12 @@ export default function ReviewStep() {
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
                 <span className="flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
-                  {basicInfo.locationCity}, {basicInfo.locationState}
+                  {locationInfo.city}, {locationInfo.state}
                 </span>
-                {basicInfo.yearsExperience && (
+                {basicInfo.yearsOfExperience && (
                   <span className="flex items-center gap-1">
                     <Briefcase className="w-4 h-4" />
-                    {basicInfo.yearsExperience} years experience
+                    {basicInfo.yearsOfExperience} years experience
                   </span>
                 )}
               </div>
@@ -157,9 +158,9 @@ export default function ReviewStep() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          {services.length > 0 ? (
+          {servicesInfo.services && servicesInfo.services.length > 0 ? (
             <div className="space-y-3">
-              {services.map((service) => (
+              {servicesInfo.services.map((service: ProviderService) => (
                 <div key={service.id} className="border rounded-lg p-3">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -225,7 +226,7 @@ export default function ReviewStep() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-7 gap-2">
-            {availability.map((day) => (
+            {availabilityInfo.weeklySchedule && availabilityInfo.weeklySchedule.map((day: WeeklyAvailability) => (
               <div
                 key={day.dayOfWeek}
                 className={`text-center p-2 rounded-lg ${
@@ -282,7 +283,7 @@ export default function ReviewStep() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm">Stripe Account</span>
-              {stripeStatus.accountId ? (
+              {paymentInfo.stripeConnectAccountId ? (
                 <Badge className="bg-green-100 text-green-800">Connected</Badge>
               ) : (
                 <Badge variant="secondary">Not Connected</Badge>
@@ -290,7 +291,7 @@ export default function ReviewStep() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm">Charges Enabled</span>
-              {stripeStatus.chargesEnabled ? (
+              {paymentInfo.stripeOnboardingComplete ? (
                 <CheckCircle className="w-4 h-4 text-green-600" />
               ) : (
                 <AlertCircle className="w-4 h-4 text-gray-400" />
@@ -298,7 +299,7 @@ export default function ReviewStep() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm">Payouts Enabled</span>
-              {stripeStatus.payoutsEnabled ? (
+              {paymentInfo.stripeOnboardingComplete ? (
                 <CheckCircle className="w-4 h-4 text-green-600" />
               ) : (
                 <AlertCircle className="w-4 h-4 text-gray-400" />
@@ -359,14 +360,14 @@ export default function ReviewStep() {
       {/* Submission Readiness */}
       <Alert className={
         [OnboardingStep.BASIC_INFO, OnboardingStep.SERVICES, OnboardingStep.AVAILABILITY, OnboardingStep.PAYMENT]
-          .every(step => completedSteps.has(step))
+          .every(step => completedSteps.includes(step))
           ? "bg-green-50 border-green-200"
           : "bg-yellow-50 border-yellow-200"
       }>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          {[OnboardingStep.BASIC_INFO, OnboardingStep.SERVICES, OnboardingStep.AVAILABILITY, OnboardingStep.STRIPE_SETUP]
-            .every(step => completedSteps.has(step)) ? (
+          {[OnboardingStep.BASIC_INFO, OnboardingStep.SERVICES, OnboardingStep.AVAILABILITY, OnboardingStep.PAYMENT]
+            .every(step => completedSteps.includes(step)) ? (
             <span className="text-green-800">
               All required information is complete. You're ready to submit your application!
             </span>
