@@ -239,18 +239,30 @@ export async function getProviderAvailability(
 // Set provider availability
 export async function setProviderAvailability(
   providerId: string,
-  availability: NewProviderAvailability[]
+  availability: Array<{
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+  }>
 ): Promise<ProviderAvailability[]> {
   // Delete existing availability
   await db
     .delete(providerAvailabilityTable)
     .where(eq(providerAvailabilityTable.providerId, providerId));
   
-  // Insert new availability
+  // Insert new availability with providerId and isActive
   if (availability.length > 0) {
+    const availabilityData: NewProviderAvailability[] = availability.map(slot => ({
+      providerId,
+      dayOfWeek: slot.dayOfWeek,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      isActive: true,
+    }));
+    
     return await db
       .insert(providerAvailabilityTable)
-      .values(availability)
+      .values(availabilityData)
       .returning();
   }
   

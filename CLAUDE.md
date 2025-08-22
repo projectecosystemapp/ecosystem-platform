@@ -370,7 +370,7 @@ graph TD
 #### 7. **Memory** - Context Retention
 ```bash
 # Use for maintaining project context
-"Store in memory: The platform fee is 10% (logged-in users) / 20% (guests), escrow release happens after service completion"
+"Store in memory: The platform fee is 10% base fee. Guests pay an additional 10% surcharge (total 110% of service price). Providers always receive service price minus 10%. Escrow release happens after service completion"
 ```
 
 #### 8. **Filesystem** - File Operations
@@ -513,22 +513,26 @@ export const useBookingStore = create<BookingStore>()(
 ```typescript
 // ✅ Test business logic thoroughly
 describe('BookingService', () => {
-  describe('calculatePlatformFee', () => {
-    it('should calculate 10% platform fee correctly', () => {
-      const amount = 100;
-      const fee = calculatePlatformFee(amount);
-      expect(fee).toBe(7);
+  describe('calculateBookingAmounts', () => {
+    it('should calculate 10% base platform fee correctly', () => {
+      const amounts = calculateBookingAmounts(10000, true); // $100 service, authenticated
+      expect(amounts.platformFee).toBe(1000); // 10%
+      expect(amounts.providerPayout).toBe(9000); // $90
+      expect(amounts.totalAmount).toBe(10000); // $100
     });
 
-    it('should round fee to 2 decimal places', () => {
-      const amount = 99.99;
-      const fee = calculatePlatformFee(amount);
-      expect(fee).toBe(7.00);
+    it('should add 10% guest surcharge', () => {
+      const amounts = calculateBookingAmounts(10000, false); // $100 service, guest
+      expect(amounts.platformFee).toBe(2000); // 10% base + 10% surcharge = $20
+      expect(amounts.providerPayout).toBe(9000); // Provider still gets $90
+      expect(amounts.totalAmount).toBe(11000); // Guest pays $110
     });
 
     it('should handle zero amount', () => {
-      const fee = calculatePlatformFee(0);
-      expect(fee).toBe(0);
+      const amounts = calculateBookingAmounts(0, true);
+      expect(amounts.platformFee).toBe(0);
+      expect(amounts.providerPayout).toBe(0);
+      expect(amounts.totalAmount).toBe(0);
     });
   });
 });
@@ -695,7 +699,7 @@ docs/api-documentation           # Documentation
 
 # Commit message format
 feat: add provider availability management
-fix: correct platform fee calculation (10% base, 20% guests)
+fix: correct platform fee calculation (10% base + 10% guest surcharge)
 refactor: extract booking logic to service
 perf: optimize provider search query
 docs: update API documentation
@@ -915,8 +919,8 @@ STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 
 # Platform Configuration
-NEXT_PUBLIC_PLATFORM_FEE_PERCENT=10  # Base fee for logged-in users
-NEXT_PUBLIC_GUEST_FEE_PERCENT=20      # Fee for non-authenticated users
+NEXT_PUBLIC_PLATFORM_FEE_PERCENT=10  # Base platform fee (providers receive service price - 10%)
+NEXT_PUBLIC_GUEST_SURCHARGE_PERCENT=10  # Additional surcharge for guest checkout (guests pay 110% total)
 NEXT_PUBLIC_APP_URL=
 
 # MCP Servers
@@ -958,7 +962,7 @@ NOTION_API_KEY=              # For Notion integration
 - [ ] Provider retention > 85%
 - [ ] Customer satisfaction (NPS) > 50
 - [ ] Payment success rate > 98%
-- [ ] Platform fee collection > 95% (10% logged-in, 20% guests)
+- [ ] Platform fee collection > 95% (10% base + 10% guest surcharge)
 
 ---
 
@@ -971,7 +975,7 @@ This document is a living standard. Update it when:
 - New tools or services are integrated
 - Lessons learned from incidents
 
-**Last Updated**: January 2025
+**Last Updated**: august 22 2025
 **Version**: 2.0.0
 **Maintainer**: Engineering Team
 

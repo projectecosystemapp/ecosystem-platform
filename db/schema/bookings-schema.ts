@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, numeric, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, numeric, integer, boolean } from "drizzle-orm/pg-core";
 
 // Booking status enum
 export const bookingStatus = {
@@ -42,6 +42,12 @@ export const bookingsTable = pgTable("bookings", {
   cancellationReason: text("cancellation_reason"),
   cancelledBy: text("cancelled_by"), // Will add foreign key constraint in migration
   cancelledAt: timestamp("cancelled_at"),
+  
+  // Booking confirmation
+  confirmationCode: text("confirmation_code"),
+  
+  // Guest booking flag
+  isGuestBooking: boolean("is_guest_booking").default(false).notNull(),
   
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),

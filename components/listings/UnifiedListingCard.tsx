@@ -16,6 +16,7 @@ import {
   TrendingUp
 } from "lucide-react";
 import { CategoryType } from "@/components/categories/CategoryTabs";
+import { PlatformFeeIndicator } from "@/components/booking/PlatformFeeIndicator";
 
 export interface BaseListingData {
   id: string;
@@ -224,20 +225,28 @@ function ServiceCard({ listing }: { listing: ServiceListingData }) {
         )}
 
         {/* Price & Location */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 text-[var(--category-primary)] font-semibold">
-            <DollarSign className="w-4 h-4" />
-            <span>{listing.price}</span>
-            {listing.priceUnit && (
-              <span className="text-sm text-gray-500">/{listing.priceUnit}</span>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1 text-[var(--category-primary)] font-semibold">
+              <DollarSign className="w-4 h-4" />
+              <span>{listing.price}</span>
+              {listing.priceUnit && (
+                <span className="text-sm text-gray-500">/{listing.priceUnit}</span>
+              )}
+            </div>
+            {listing.location && (
+              <div className="flex items-center gap-1 text-sm text-gray-500">
+                <MapPin className="w-3 h-3" />
+                <span>{listing.location}</span>
+              </div>
             )}
           </div>
-          {listing.location && (
-            <div className="flex items-center gap-1 text-sm text-gray-500">
-              <MapPin className="w-3 h-3" />
-              <span>{listing.location}</span>
-            </div>
-          )}
+          {/* Platform Fee Indicator */}
+          <PlatformFeeIndicator 
+            servicePrice={parseFloat(listing.price) * 100} 
+            variant="inline" 
+            className="justify-start"
+          />
         </div>
       </div>
     </>

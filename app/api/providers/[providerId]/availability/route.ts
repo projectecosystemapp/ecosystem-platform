@@ -21,9 +21,14 @@ import { withRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limit";
  * GET /api/providers/[providerId]/availability - Check provider availability
  * Can be called by anyone to check availability for booking
  */
-export const GET = withRateLimit(
-  RATE_LIMIT_CONFIGS.api,
-  async (req: NextRequest, { params }: { params: { providerId: string } }) => {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { providerId: string } }
+) {
+  // Apply rate limiting
+  const rateLimiter = withRateLimit(
+    RATE_LIMIT_CONFIGS.api,
+    async (request: NextRequest) => {
     try {
       const providerId = params.providerId;
 
@@ -250,16 +255,24 @@ export const GET = withRateLimit(
         { status: 500 }
       );
     }
-  }
-);
+    }
+  );
+  
+  return rateLimiter(req);
+}
 
 /**
  * POST /api/providers/[providerId]/availability - Update provider availability
  * Only accessible by the provider themselves
  */
-export const POST = withRateLimit(
-  RATE_LIMIT_CONFIGS.api,
-  async (req: NextRequest, { params }: { params: { providerId: string } }) => {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { providerId: string } }
+) {
+  // Apply rate limiting
+  const rateLimiter = withRateLimit(
+    RATE_LIMIT_CONFIGS.api,
+    async (request: NextRequest) => {
     try {
       const { userId } = auth();
 
@@ -393,8 +406,11 @@ export const POST = withRateLimit(
         { status: 500 }
       );
     }
-  }
-);
+    }
+  );
+  
+  return rateLimiter(req);
+}
 
 /**
  * Generate available time slots for a specific day

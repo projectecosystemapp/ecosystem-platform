@@ -14,9 +14,14 @@ import { withRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limit";
  * GET /api/providers/[providerId]/bookings - Get bookings for a specific provider
  * Only accessible by the provider themselves
  */
-export const GET = withRateLimit(
-  RATE_LIMIT_CONFIGS.api,
-  async (req: NextRequest, { params }: { params: { providerId: string } }) => {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { providerId: string } }
+) {
+  // Apply rate limiting
+  const rateLimiter = withRateLimit(
+    RATE_LIMIT_CONFIGS.api,
+    async (request: NextRequest) => {
     try {
       const { userId } = auth();
 
@@ -65,7 +70,7 @@ export const GET = withRateLimit(
 
       // Parse and validate query parameters
       const url = new URL(req.url);
-      const queryParams = Object.fromEntries(url.searchParams.entries());
+      const queryParams: any = Object.fromEntries(url.searchParams.entries());
       
       // Handle array parameters
       if (queryParams.status && queryParams.status.includes(',')) {
@@ -109,10 +114,13 @@ export const GET = withRateLimit(
       }
 
       // Calculate offset for pagination
-      const offset = (filters.page - 1) * filters.limit;
+      const page = filters.page || 1;
+      const limit = filters.limit || 10;
+      const offset = (page - 1) * limit;
 
       // Determine sort order
-      const sortColumn = bookingsTable[filters.sortBy];
+      const sortBy = filters.sortBy || 'bookingDate';
+      const sortColumn = bookingsTable[sortBy];
       const orderBy = filters.sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
       // Execute query to get bookings
@@ -145,7 +153,7 @@ export const GET = withRateLimit(
         .from(bookingsTable)
         .where(and(...conditions))
         .orderBy(orderBy)
-        .limit(filters.limit)
+        .limit(limit)
         .offset(offset);
 
       const bookings = await bookingsQuery;
@@ -214,9 +222,9 @@ export const GET = withRateLimit(
         .limit(10);
 
       // Calculate pagination metadata
-      const totalPages = Math.ceil(totalCount / filters.limit);
-      const hasNextPage = filters.page < totalPages;
-      const hasPreviousPage = filters.page > 1;
+      const totalPages = Math.ceil(totalCount / limit);
+      const hasNextPage = page < totalPages;
+      const hasPreviousPage = page > 1;
 
       return NextResponse.json({
         provider: {
@@ -225,8 +233,8 @@ export const GET = withRateLimit(
         },
         bookings,
         pagination: {
-          page: filters.page,
-          limit: filters.limit,
+          page,
+          limit,
           totalCount,
           totalPages,
           hasNextPage,
@@ -258,5 +266,8 @@ export const GET = withRateLimit(
         { status: 500 }
       );
     }
-  }
-);
+    }
+  );
+  
+  return rateLimiter(req);
+}

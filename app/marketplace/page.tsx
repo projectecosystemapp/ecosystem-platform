@@ -33,7 +33,7 @@ function transformProviderToListing(provider: Provider): ListingData {
     },
     price: provider.hourlyRate?.toString() || "0",
     priceUnit: "hour",
-    availability: provider.stripeOnboardingComplete ? "available" : "unavailable",
+    availability: provider.stripeOnboardingComplete ? "available" : "offline" as "available" | "offline" | "busy",
     availabilityText: provider.stripeOnboardingComplete ? "Available Now" : "Setup Pending",
     services: Array.isArray(provider.services) 
       ? provider.services.map(service => 

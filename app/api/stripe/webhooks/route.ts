@@ -84,13 +84,14 @@ export async function POST(req: Request) {
           await handleBookingTransferCreated(event);
           break;
 
-        case "transfer.paid":
-          await handleBookingTransferPaid(event);
-          break;
+        // These event types don't exist in Stripe's type definitions
+        // case "transfer.paid":
+        //   await handleBookingTransferPaid(event);
+        //   break;
 
-        case "transfer.failed":
-          await handleBookingTransferFailed(event);
-          break;
+        // case "transfer.failed":
+        //   await handleBookingTransferFailed(event);
+        //   break;
 
         default:
           throw new Error("Unhandled relevant event!");

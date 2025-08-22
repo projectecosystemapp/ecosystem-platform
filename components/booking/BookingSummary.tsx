@@ -19,6 +19,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { FeeBreakdown } from "./FeeBreakdown";
+import { useAuth } from "@clerk/nextjs";
 
 interface BookingSummaryProps {
   provider: {
@@ -52,6 +54,7 @@ export function BookingSummary({
   customerNotes,
   showPriceBreakdown = true,
 }: BookingSummaryProps) {
+  const { isSignedIn } = useAuth();
   // Format display values
   const formatTime = (timeStr: string) => {
     const [hours, minutes] = timeStr.split(":").map(Number);
@@ -215,48 +218,22 @@ export function BookingSummary({
         </div>
       </Card>
 
-      {/* Price Breakdown Card */}
+      {/* Price Breakdown with Transparent Fee Display */}
       {showPriceBreakdown && (
-        <Card className="p-6">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <CreditCard className="h-4 w-4" />
-              Price Breakdown
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Service Fee</span>
-                <span className="font-medium">{formatCurrency(subtotal)}</span>
-              </div>
-              
-              {/* Platform fee info (for transparency) */}
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>Platform fee ({(platformFeeRate * 100).toFixed(0)}%)</span>
-                <span>Included</span>
-              </div>
-              
-              <Separator className="my-2" />
-              
-              <div className="flex justify-between">
-                <span className="font-semibold">Total Amount</span>
-                <span className="font-semibold text-lg text-blue-600">
-                  {formatCurrency(total)}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment Security Notice */}
-            <Alert className="bg-blue-50 border-blue-200">
-              <Shield className="h-4 w-4 text-blue-600" />
-              <AlertDescription className="text-sm text-blue-800">
-                Your payment is secure and protected. You&apos;ll be charged only after 
-                confirming your booking.
-              </AlertDescription>
-            </Alert>
-          </div>
-        </Card>
+        <FeeBreakdown 
+          servicePrice={service.price * 100} // Convert to cents for proper display
+          isAuthenticated={isSignedIn || false}
+        />
       )}
+
+      {/* Payment Security Notice */}
+      <Alert className="bg-blue-50 border-blue-200">
+        <Shield className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-sm text-blue-800">
+          Your payment is secure and protected. You&apos;ll be charged only after 
+          confirming your booking.
+        </AlertDescription>
+      </Alert>
 
       {/* Cancellation Policy */}
       <Card className="p-4 bg-gray-50 border-gray-200">

@@ -1,6 +1,7 @@
 "use client";
 
 import { BookingFlow } from "@/components/booking";
+import { GuestCheckoutProvider } from "@/contexts/guest-checkout-context";
 import {
   Dialog,
   DialogContent,
@@ -47,14 +48,16 @@ export function BookingModal({
         </DialogHeader>
 
         <div className="mt-4">
-          <BookingFlow
-            provider={provider}
-            selectedService={selectedService}
-            onServiceSelect={(service) => {
-              // Handle service selection if needed
-              console.log("Service selected:", service);
-            }}
-          />
+          <GuestCheckoutProvider>
+            <BookingFlow
+              provider={provider}
+              selectedService={selectedService}
+              onServiceSelect={(service) => {
+                // Handle service selection if needed
+                console.log("Service selected:", service);
+              }}
+            />
+          </GuestCheckoutProvider>
         </div>
       </DialogContent>
     </Dialog>

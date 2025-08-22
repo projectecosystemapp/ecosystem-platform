@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useProviderAvailability } from "@/hooks/api/useProviders";
 import { format as formatDate } from "date-fns";
+import { getAvailableSlotsAction } from "@/actions/availability-actions";
 
 interface TimeSlotPickerProps {
   providerId: string;
@@ -77,13 +78,12 @@ export function TimeSlotPicker({
       try {
         const result = await getAvailableSlotsAction(
           providerId,
-          selectedDate,
-          selectedDate,
-          serviceDuration,
-          timezone
+          format(selectedDate, 'yyyy-MM-dd'),
+          serviceDuration || 60,
+          timezone ? { timezone } : undefined
         );
 
-        if (result.isSuccess && result.data && result.data.length > 0) {
+        if (result.success && result.data && result.data.length > 0) {
           const dayData = result.data[0];
           const slots: TimeSlot[] = dayData.slots.map((slot: any) => ({
             startTime: slot.startTime,

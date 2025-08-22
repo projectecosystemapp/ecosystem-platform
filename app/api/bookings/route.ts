@@ -31,7 +31,7 @@ export const GET = withRateLimit(
 
       // Parse and validate query parameters
       const url = new URL(req.url);
-      const queryParams = Object.fromEntries(url.searchParams.entries());
+      const queryParams: any = Object.fromEntries(url.searchParams.entries());
       
       // Handle array parameters (status can be multiple values)
       if (queryParams.status && queryParams.status.includes(',')) {
@@ -75,19 +75,23 @@ export const GET = withRateLimit(
 
       // Search across service name and notes
       if (filters.search) {
-        conditions.push(
-          or(
-            ilike(bookingsTable.serviceName, `%${filters.search}%`),
-            ilike(bookingsTable.customerNotes, `%${filters.search}%`)
-          )
+        const searchCondition = or(
+          ilike(bookingsTable.serviceName, `%${filters.search}%`),
+          ilike(bookingsTable.customerNotes, `%${filters.search}%`)
         );
+        if (searchCondition) {
+          conditions.push(searchCondition);
+        }
       }
 
       // Calculate offset for pagination
-      const offset = (filters.page - 1) * filters.limit;
+      const page = filters.page || 1;
+      const limit = filters.limit || 10;
+      const offset = (page - 1) * limit;
 
       // Determine sort order
-      const sortColumn = bookingsTable[filters.sortBy];
+      const sortBy = filters.sortBy || 'createdAt';
+      const sortColumn = bookingsTable[sortBy];
       const orderBy = filters.sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
       // Execute query with join to get provider information
@@ -126,7 +130,7 @@ export const GET = withRateLimit(
         .leftJoin(providersTable, eq(bookingsTable.providerId, providersTable.id))
         .where(and(...conditions))
         .orderBy(orderBy)
-        .limit(filters.limit)
+        .limit(limit)
         .offset(offset);
 
       const bookings = await bookingsQuery;
@@ -140,15 +144,15 @@ export const GET = withRateLimit(
       const totalCount = countResult[0]?.count || 0;
 
       // Calculate pagination metadata
-      const totalPages = Math.ceil(totalCount / filters.limit);
-      const hasNextPage = filters.page < totalPages;
-      const hasPreviousPage = filters.page > 1;
+      const totalPages = Math.ceil(totalCount / limit);
+      const hasNextPage = page < totalPages;
+      const hasPreviousPage = page > 1;
 
       return NextResponse.json({
         bookings,
         pagination: {
-          page: filters.page,
-          limit: filters.limit,
+          page,
+          limit,
           totalCount,
           totalPages,
           hasNextPage,

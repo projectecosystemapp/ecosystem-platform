@@ -12,6 +12,10 @@ import {
   getBookingTransactions,
   updateTransactionStatus,
   markCompletedBookings,
+  cancelBooking,
+  completeBooking,
+  getUpcomingBookings,
+  getPastBookings,
 } from "@/db/queries/bookings-queries";
 import { 
   type Booking, 
@@ -425,8 +429,8 @@ export async function getBookingStatisticsAction(
   }
 }
 
-// Mark a booking as completed (provider action)
-export async function markBookingCompleteAction(
+// Complete a booking (provider action)
+export async function completeBookingAction(
   bookingId: string,
   notes?: string
 ): Promise<ActionResult<Booking>> {
@@ -454,12 +458,8 @@ export async function markBookingCompleteAction(
       return { isSuccess: false, message: "Unauthorized" };
     }
 
-    // Update booking status
-    const updatedBooking = await updateBookingStatus(
-      bookingId,
-      bookingStatus.COMPLETED,
-      { providerNotes: notes }
-    );
+    // Complete the booking using the new function
+    const updatedBooking = await completeBooking(bookingId, userId, notes);
 
     // Trigger payout to provider (this would integrate with Stripe Connect)
     // For now, just update the transaction status
@@ -473,6 +473,7 @@ export async function markBookingCompleteAction(
     }
 
     revalidatePath("/dashboard");
+    revalidatePath("/provider/bookings");
     
     return {
       isSuccess: true,
@@ -484,6 +485,9 @@ export async function markBookingCompleteAction(
     return { isSuccess: false, message: errorMessage };
   }
 }
+
+// Mark a booking as completed (alias for backward compatibility)
+export const markBookingCompleteAction = completeBookingAction;
 
 // Mark a booking as no-show (provider action)
 export async function markBookingNoShowAction(

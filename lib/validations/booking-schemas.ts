@@ -312,6 +312,8 @@ export function formatValidationErrors(error: z.ZodError) {
 
 /**
  * Calculate booking amounts based on service price and authentication status
+ * Guests pay a 10% surcharge on top of the service price
+ * Providers always receive the same amount (service price - 10% platform fee)
  */
 export function calculateBookingAmounts(
   servicePrice: number, 
@@ -321,12 +323,20 @@ export function calculateBookingAmounts(
   platformFee: number;
   providerPayout: number;
 } {
-  const feeRate = isAuthenticated ? 0.10 : 0.20; // 10% for logged-in, 20% for guests
-  const platformFee = Math.round(servicePrice * feeRate);
-  const providerPayout = servicePrice - platformFee;
+  const basePlatformFeeRate = 0.10; // Base 10% platform fee
+  const guestSurchargeRate = 0.10; // Additional 10% surcharge for guests
+  
+  // Provider always gets service price minus base platform fee
+  const basePlatformFee = Math.round(servicePrice * basePlatformFeeRate);
+  const providerPayout = servicePrice - basePlatformFee;
+  
+  // Guests pay an additional surcharge
+  const guestSurcharge = isAuthenticated ? 0 : Math.round(servicePrice * guestSurchargeRate);
+  const totalAmount = servicePrice + guestSurcharge;
+  const platformFee = basePlatformFee + guestSurcharge;
   
   return {
-    totalAmount: servicePrice,
+    totalAmount,
     platformFee,
     providerPayout
   };

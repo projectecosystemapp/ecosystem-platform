@@ -207,15 +207,21 @@ export default function OnboardingPage() {
         services: formData.services,
       });
 
-      if (!providerResult.isSuccess) {
+      if (!providerResult.isSuccess || !providerResult.data) {
         throw new Error(providerResult.message);
       }
 
-      // Set availability schedule
-      const availabilityResult = await setWeeklyScheduleAction(formData.weeklySchedule);
+      const providerId = providerResult.data.id;
+
+      // Set availability schedule (convert object to array)
+      const scheduleArray = Object.entries(formData.weeklySchedule).map(([day, schedule]) => ({
+        ...schedule,
+        dayOfWeek: parseInt(day)
+      }));
+      const availabilityResult = await setWeeklyScheduleAction(providerId, scheduleArray);
       
-      if (!availabilityResult.isSuccess) {
-        console.error("Failed to set availability:", availabilityResult.message);
+      if (!availabilityResult.success) {
+        console.error("Failed to set availability:", availabilityResult.error || "Unknown error");
       }
 
       // Update images if provided

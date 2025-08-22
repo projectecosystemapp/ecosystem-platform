@@ -1,739 +1,874 @@
 import { db } from "@/db/db";
-import { 
-  bookingsTable, 
-  transactionsTable,
-  bookingStatus 
-} from "@/db/schema/bookings-schema";
-import { 
-  providersTable,
-  providerAvailabilityTable 
-} from "@/db/schema/providers-schema";
-import { profilesTable } from "@/db/schema/profiles-schema";
-import { reviewsTable } from "@/db/schema/reviews-schema";
-import { eq, and, gte, lte, between, sql, desc, asc, count, avg, sum } from "drizzle-orm";
-import { subDays, startOfDay, endOfDay, format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { bookingsTable, transactionsTable, providersTable, reviewsTable } from "@/db/schema";
+import { and, eq, gte, lte, desc, count, avg, sum, sql } from "drizzle-orm";
 
 /**
- * Comprehensive Analytics Queries for Data Pipeline Management
- * Provides insights into booking patterns, provider performance, and platform metrics
+ * Analytics Queries for Provider Dashboard
+ * 
+ * Business Context:
+ * - Platform fee is 10% base fee for authenticated users
+ * - Guests pay additional 10% surcharge (total 20% platform fee)
+ * - Providers always receive servicePrice - 10% base fee
+ * - All monetary values stored as DECIMAL(10,2)
+ * 
+ * Time periods supported: 7d, 30d, 90d, 1yr, all
  */
 
-// ===========================
-// PLATFORM-WIDE ANALYTICS
-// ===========================
+export type TimePeriod = '7d' | '30d' | '90d' | '1yr' | 'all';
 
-export interface PlatformMetrics {
+export interface AnalyticsPeriod {
+  start: Date;
+  end: Date;
+}
+
+export interface EarningsData {
+  totalEarnings: number;
   totalBookings: number;
-  totalRevenue: number;
-  totalPlatformFees: number;
-  totalProviders: number;
-  activeProviders: number;
   averageBookingValue: number;
-  bookingSuccessRate: number;
-  providerUtilizationRate: number;
-}
-
-export async function getPlatformMetrics(
-  dateRange?: { start: Date; end: Date }
-): Promise<PlatformMetrics> {
-  const startDate = dateRange?.start || startOfMonth(subMonths(new Date(), 1));
-  const endDate = dateRange?.end || endOfMonth(new Date());
-
-  // Execute analytics queries in parallel for efficiency
-  const [
-    bookingStats,
-    revenueStats,
-    providerStats,
-    utilizationStats
-  ] = await Promise.all([
-    // Booking statistics
-    db
-      .select({
-        totalBookings: count(),
-        successfulBookings: count(sql`CASE WHEN ${bookingsTable.status} = 'completed' THEN 1 END`),
-        cancelledBookings: count(sql`CASE WHEN ${bookingsTable.status} = 'cancelled' THEN 1 END`),
-      })
-      .from(bookingsTable)
-      .where(between(bookingsTable.bookingDate, startDate, endDate)),
-
-    // Revenue statistics
-    db
-      .select({
-        totalRevenue: sum(sql`CASE WHEN ${bookingsTable.status} = 'completed' THEN ${bookingsTable.totalAmount} ELSE 0 END`),
-        totalPlatformFees: sum(sql`CASE WHEN ${bookingsTable.status} = 'completed' THEN ${bookingsTable.platformFee} ELSE 0 END`),
-        avgBookingValue: avg(sql`CASE WHEN ${bookingsTable.status} = 'completed' THEN ${bookingsTable.totalAmount} END`),
-      })
-      .from(bookingsTable)
-      .where(between(bookingsTable.bookingDate, startDate, endDate)),
-
-    // Provider statistics
-    db
-      .select({
-        totalProviders: count(),
-        activeProviders: count(sql`CASE WHEN ${providersTable.isActive} = true THEN 1 END`),
-        verifiedProviders: count(sql`CASE WHEN ${providersTable.isVerified} = true THEN 1 END`),
-      })
-      .from(providersTable),
-
-    // Provider utilization (providers with bookings in period)
-    db
-      .select({
-        providersWithBookings: count(sql`DISTINCT ${bookingsTable.providerId}`),
-      })
-      .from(bookingsTable)
-      .where(
-        and(
-          between(bookingsTable.bookingDate, startDate, endDate),
-          sql`${bookingsTable.status} IN ('confirmed', 'completed')`
-        )
-      )
-  ]);
-
-  const totalBookings = bookingStats[0]?.totalBookings || 0;
-  const successfulBookings = bookingStats[0]?.successfulBookings || 0;
-  const totalRevenue = parseFloat(revenueStats[0]?.totalRevenue?.toString() || '0');
-  const totalPlatformFees = parseFloat(revenueStats[0]?.totalPlatformFees?.toString() || '0');
-  const averageBookingValue = parseFloat(revenueStats[0]?.avgBookingValue?.toString() || '0');
-  const totalProviders = providerStats[0]?.totalProviders || 0;
-  const activeProviders = providerStats[0]?.activeProviders || 0;
-  const providersWithBookings = utilizationStats[0]?.providersWithBookings || 0;
-
-  return {
-    totalBookings,
-    totalRevenue,
-    totalPlatformFees,
-    totalProviders,
-    activeProviders,
-    averageBookingValue,
-    bookingSuccessRate: totalBookings > 0 ? (successfulBookings / totalBookings) * 100 : 0,
-    providerUtilizationRate: activeProviders > 0 ? (providersWithBookings / activeProviders) * 100 : 0,
+  platformFees: number;
+  pendingPayouts: number;
+  completedPayouts: number;
+  periodComparison: {
+    earningsChange: number;
+    bookingsChange: number;
+    averageValueChange: number;
   };
+  dailyEarnings: Array<{
+    date: string;
+    earnings: number;
+    bookings: number;
+  }>;
+  monthlyTrends: Array<{
+    month: string;
+    earnings: number;
+    bookings: number;
+  }>;
 }
 
-// ===========================
-// BOOKING ANALYTICS
-// ===========================
-
-export interface BookingTrends {
-  dailyBookings: Array<{ date: string; bookings: number; revenue: number }>;
-  hourlyDistribution: Array<{ hour: number; bookings: number }>;
-  dayOfWeekDistribution: Array<{ dayOfWeek: number; bookings: number }>;
-  statusDistribution: Array<{ status: string; count: number; percentage: number }>;
-  servicePopularity: Array<{ serviceName: string; bookings: number; revenue: number }>;
-}
-
-export async function getBookingTrends(
-  dateRange?: { start: Date; end: Date }
-): Promise<BookingTrends> {
-  const startDate = dateRange?.start || subDays(new Date(), 30);
-  const endDate = dateRange?.end || new Date();
-
-  const [
-    dailyStats,
-    hourlyStats,
-    dayOfWeekStats,
-    statusStats,
-    serviceStats
-  ] = await Promise.all([
-    // Daily booking trends
-    db.execute(sql`
-      SELECT 
-        DATE(booking_date) as date,
-        COUNT(*) as bookings,
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END), 0) as revenue
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY DATE(booking_date)
-      ORDER BY date
-    `),
-
-    // Hourly distribution
-    db.execute(sql`
-      SELECT 
-        EXTRACT(HOUR FROM (start_time::TIME)) as hour,
-        COUNT(*) as bookings
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY EXTRACT(HOUR FROM (start_time::TIME))
-      ORDER BY hour
-    `),
-
-    // Day of week distribution
-    db.execute(sql`
-      SELECT 
-        EXTRACT(DOW FROM booking_date) as day_of_week,
-        COUNT(*) as bookings
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY EXTRACT(DOW FROM booking_date)
-      ORDER BY day_of_week
-    `),
-
-    // Status distribution
-    db.execute(sql`
-      SELECT 
-        status,
-        COUNT(*) as count,
-        ROUND((COUNT(*) * 100.0 / SUM(COUNT(*)) OVER ()), 2) as percentage
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY status
-      ORDER BY count DESC
-    `),
-
-    // Service popularity
-    db.execute(sql`
-      SELECT 
-        service_name,
-        COUNT(*) as bookings,
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END), 0) as revenue
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY service_name
-      ORDER BY bookings DESC
-      LIMIT 10
-    `)
-  ]);
-
-  return {
-    dailyBookings: dailyStats.rows.map((row: any) => ({
-      date: row.date,
-      bookings: parseInt(row.bookings),
-      revenue: parseFloat(row.revenue)
-    })),
-    hourlyDistribution: hourlyStats.rows.map((row: any) => ({
-      hour: parseInt(row.hour),
-      bookings: parseInt(row.bookings)
-    })),
-    dayOfWeekDistribution: dayOfWeekStats.rows.map((row: any) => ({
-      dayOfWeek: parseInt(row.day_of_week),
-      bookings: parseInt(row.bookings)
-    })),
-    statusDistribution: statusStats.rows.map((row: any) => ({
-      status: row.status,
-      count: parseInt(row.count),
-      percentage: parseFloat(row.percentage)
-    })),
-    servicePopularity: serviceStats.rows.map((row: any) => ({
-      serviceName: row.service_name,
-      bookings: parseInt(row.bookings),
-      revenue: parseFloat(row.revenue)
-    }))
-  };
-}
-
-// ===========================
-// PROVIDER PERFORMANCE ANALYTICS
-// ===========================
-
-export interface ProviderPerformance {
-  providerId: string;
-  providerName: string;
+export interface BookingMetrics {
   totalBookings: number;
   completedBookings: number;
+  cancelledBookings: number;
+  noShowBookings: number;
   completionRate: number;
-  totalRevenue: number;
+  cancellationRate: number;
   averageBookingValue: number;
+  bookingsByStatus: Array<{
+    status: string;
+    count: number;
+    percentage: number;
+  }>;
+  bookingTrends: Array<{
+    date: string;
+    pending: number;
+    confirmed: number;
+    completed: number;
+    cancelled: number;
+  }>;
+  peakHours: Array<{
+    hour: number;
+    bookings: number;
+  }>;
+}
+
+export interface CustomerMetrics {
+  totalCustomers: number;
+  returningCustomers: number;
+  newCustomers: number;
+  customerRetentionRate: number;
+  averageBookingsPerCustomer: number;
+  customerLifetimeValue: number;
+  topCustomers: Array<{
+    customerId: string;
+    totalBookings: number;
+    totalSpent: number;
+    lastBookingDate: string;
+  }>;
+  customerAcquisition: Array<{
+    date: string;
+    newCustomers: number;
+    returningCustomers: number;
+  }>;
+}
+
+export interface PerformanceMetrics {
   averageRating: number;
   totalReviews: number;
-  utilizationRate: number;
-  responseTime: number; // avg time to confirm bookings
+  ratingDistribution: Array<{
+    rating: number;
+    count: number;
+    percentage: number;
+  }>;
+  responseTime: number; // Average time to confirm bookings
+  onTimeRate: number;
+  customerSatisfactionScore: number;
+  recentReviews: Array<{
+    rating: number;
+    reviewText: string;
+    customerName: string;
+    createdAt: string;
+    serviceName: string;
+  }>;
+  ratingTrends: Array<{
+    month: string;
+    averageRating: number;
+    reviewCount: number;
+  }>;
 }
-
-export async function getTopPerformingProviders(
-  limit: number = 20,
-  dateRange?: { start: Date; end: Date }
-): Promise<ProviderPerformance[]> {
-  const startDate = dateRange?.start || subDays(new Date(), 30);
-  const endDate = dateRange?.end || new Date();
-
-  const results = await db.execute(sql`
-    WITH provider_stats AS (
-      SELECT 
-        p.id as provider_id,
-        p.display_name as provider_name,
-        COUNT(b.id) as total_bookings,
-        COUNT(CASE WHEN b.status = 'completed' THEN 1 END) as completed_bookings,
-        ROUND(
-          CASE 
-            WHEN COUNT(b.id) > 0 
-            THEN (COUNT(CASE WHEN b.status = 'completed' THEN 1 END) * 100.0 / COUNT(b.id))
-            ELSE 0 
-          END, 2
-        ) as completion_rate,
-        COALESCE(SUM(CASE WHEN b.status = 'completed' THEN b.provider_payout ELSE 0 END), 0) as total_revenue,
-        COALESCE(AVG(CASE WHEN b.status = 'completed' THEN b.total_amount END), 0) as avg_booking_value,
-        p.average_rating,
-        p.total_reviews,
-        COALESCE(AVG(
-          CASE WHEN b.status = 'confirmed' AND b.updated_at != b.created_at 
-          THEN EXTRACT(EPOCH FROM (b.updated_at - b.created_at)) / 3600 
-          END
-        ), 0) as avg_response_time_hours
-      FROM providers p
-      LEFT JOIN bookings b ON p.id = b.provider_id 
-        AND b.booking_date BETWEEN ${startDate} AND ${endDate}
-      WHERE p.is_active = true
-      GROUP BY p.id, p.display_name, p.average_rating, p.total_reviews
-    ),
-    availability_stats AS (
-      SELECT 
-        p.id as provider_id,
-        COUNT(DISTINCT pa.id) * 8 as total_available_hours_per_week -- assuming 8-hour slots
-      FROM providers p
-      LEFT JOIN provider_availability pa ON p.id = pa.provider_id AND pa.is_active = true
-      GROUP BY p.id
-    )
-    SELECT 
-      ps.*,
-      ROUND(
-        CASE 
-          WHEN av.total_available_hours_per_week > 0 
-          THEN (ps.total_bookings * 1.0 / av.total_available_hours_per_week) * 100
-          ELSE 0 
-        END, 2
-      ) as utilization_rate
-    FROM provider_stats ps
-    LEFT JOIN availability_stats av ON ps.provider_id = av.provider_id
-    ORDER BY ps.total_revenue DESC, ps.completion_rate DESC
-    LIMIT ${limit}
-  `);
-
-  return results.rows.map((row: any) => ({
-    providerId: row.provider_id,
-    providerName: row.provider_name,
-    totalBookings: parseInt(row.total_bookings),
-    completedBookings: parseInt(row.completed_bookings),
-    completionRate: parseFloat(row.completion_rate),
-    totalRevenue: parseFloat(row.total_revenue),
-    averageBookingValue: parseFloat(row.avg_booking_value),
-    averageRating: parseFloat(row.average_rating),
-    totalReviews: parseInt(row.total_reviews),
-    utilizationRate: parseFloat(row.utilization_rate),
-    responseTime: parseFloat(row.avg_response_time_hours)
-  }));
-}
-
-// ===========================
-// REVENUE ANALYTICS
-// ===========================
 
 export interface RevenueBreakdown {
-  totalGrossRevenue: number;
-  totalPlatformFees: number;
-  totalProviderPayouts: number;
-  averageFeePercentage: number;
-  monthlyRevenueTrend: Array<{ month: string; revenue: number; fees: number }>;
-  revenueByService: Array<{ serviceName: string; revenue: number; bookings: number }>;
+  byService: Array<{
+    serviceName: string;
+    bookings: number;
+    revenue: number;
+    averagePrice: number;
+    percentage: number;
+  }>;
+  byMonth: Array<{
+    month: string;
+    revenue: number;
+    bookings: number;
+    averageValue: number;
+  }>;
+  byDayOfWeek: Array<{
+    dayName: string;
+    dayIndex: number;
+    revenue: number;
+    bookings: number;
+  }>;
+  byTimeOfDay: Array<{
+    hour: number;
+    revenue: number;
+    bookings: number;
+  }>;
 }
 
-export async function getRevenueAnalytics(
-  dateRange?: { start: Date; end: Date }
-): Promise<RevenueBreakdown> {
-  const startDate = dateRange?.start || subMonths(new Date(), 12);
-  const endDate = dateRange?.end || new Date();
+export interface TopServices {
+  mostBooked: Array<{
+    serviceName: string;
+    bookings: number;
+    revenue: number;
+    averageRating: number;
+    averagePrice: number;
+  }>;
+  highestRevenue: Array<{
+    serviceName: string;
+    revenue: number;
+    bookings: number;
+    averagePrice: number;
+    profitMargin: number;
+  }>;
+  bestRated: Array<{
+    serviceName: string;
+    averageRating: number;
+    reviewCount: number;
+    bookings: number;
+    revenue: number;
+  }>;
+}
 
-  const [summaryStats, monthlyTrend, serviceRevenue] = await Promise.all([
-    // Overall revenue summary
-    db.execute(sql`
-      SELECT 
-        COALESCE(SUM(total_amount), 0) as total_gross_revenue,
-        COALESCE(SUM(platform_fee), 0) as total_platform_fees,
-        COALESCE(SUM(provider_payout), 0) as total_provider_payouts,
-        ROUND(AVG(platform_fee * 100.0 / NULLIF(total_amount, 0)), 2) as avg_fee_percentage
-      FROM ${bookingsTable}
-      WHERE status = 'completed' 
-        AND booking_date BETWEEN ${startDate} AND ${endDate}
-    `),
+/**
+ * Convert time period string to date range
+ */
+function getDateRange(period: TimePeriod): AnalyticsPeriod {
+  const end = new Date();
+  let start = new Date();
 
-    // Monthly revenue trend
-    db.execute(sql`
-      SELECT 
-        TO_CHAR(booking_date, 'YYYY-MM') as month,
-        COALESCE(SUM(total_amount), 0) as revenue,
-        COALESCE(SUM(platform_fee), 0) as fees
-      FROM ${bookingsTable}
-      WHERE status = 'completed' 
-        AND booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY TO_CHAR(booking_date, 'YYYY-MM')
-      ORDER BY month
-    `),
+  switch (period) {
+    case '7d':
+      start.setDate(end.getDate() - 7);
+      break;
+    case '30d':
+      start.setDate(end.getDate() - 30);
+      break;
+    case '90d':
+      start.setDate(end.getDate() - 90);
+      break;
+    case '1yr':
+      start.setFullYear(end.getFullYear() - 1);
+      break;
+    case 'all':
+      start = new Date(2020, 0, 1); // Platform launch date
+      break;
+  }
 
-    // Revenue by service
-    db.execute(sql`
-      SELECT 
-        service_name,
-        COALESCE(SUM(total_amount), 0) as revenue,
-        COUNT(*) as bookings
-      FROM ${bookingsTable}
-      WHERE status = 'completed' 
-        AND booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY service_name
-      ORDER BY revenue DESC
-      LIMIT 15
-    `)
-  ]);
+  return { start, end };
+}
 
-  const summary = summaryStats.rows[0] || {};
+/**
+ * Get previous period for comparison
+ */
+function getPreviousPeriod(period: TimePeriod): AnalyticsPeriod {
+  const current = getDateRange(period);
+  const duration = current.end.getTime() - current.start.getTime();
   
   return {
-    totalGrossRevenue: parseFloat(summary.total_gross_revenue || '0'),
-    totalPlatformFees: parseFloat(summary.total_platform_fees || '0'),
-    totalProviderPayouts: parseFloat(summary.total_provider_payouts || '0'),
-    averageFeePercentage: parseFloat(summary.avg_fee_percentage || '0'),
-    monthlyRevenueTrend: monthlyTrend.rows.map((row: any) => ({
-      month: row.month,
-      revenue: parseFloat(row.revenue),
-      fees: parseFloat(row.fees)
-    })),
-    revenueByService: serviceRevenue.rows.map((row: any) => ({
-      serviceName: row.service_name,
-      revenue: parseFloat(row.revenue),
-      bookings: parseInt(row.bookings)
-    }))
-  };
-}
-
-// ===========================
-// AVAILABILITY ANALYTICS
-// ===========================
-
-export interface AvailabilityInsights {
-  averageAvailabilityPerProvider: number;
-  peakBookingHours: Array<{ hour: number; utilization: number }>;
-  utilizationByDayOfWeek: Array<{ dayOfWeek: number; utilization: number }>;
-  providersWithLowUtilization: Array<{ providerId: string; providerName: string; utilizationRate: number }>;
-}
-
-export async function getAvailabilityInsights(
-  dateRange?: { start: Date; end: Date }
-): Promise<AvailabilityInsights> {
-  const startDate = dateRange?.start || subDays(new Date(), 30);
-  const endDate = dateRange?.end || new Date();
-
-  const [
-    availabilityStats,
-    hourlyUtilization,
-    weeklyUtilization,
-    lowUtilizationProviders
-  ] = await Promise.all([
-    // Average availability per provider
-    db.execute(sql`
-      SELECT 
-        AVG(hours_per_week) as avg_availability
-      FROM (
-        SELECT 
-          provider_id,
-          COUNT(*) * 8 as hours_per_week  -- assuming 8-hour days
-        FROM provider_availability 
-        WHERE is_active = true
-        GROUP BY provider_id
-      ) availability_summary
-    `),
-
-    // Peak booking hours
-    db.execute(sql`
-      WITH hourly_slots AS (
-        SELECT 
-          EXTRACT(HOUR FROM start_time::TIME) as hour,
-          COUNT(*) as bookings,
-          COUNT(DISTINCT provider_id) * 30 as total_possible_slots -- rough estimate
-        FROM ${bookingsTable}
-        WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-          AND status IN ('confirmed', 'completed')
-        GROUP BY EXTRACT(HOUR FROM start_time::TIME)
-      )
-      SELECT 
-        hour,
-        ROUND((bookings * 100.0 / NULLIF(total_possible_slots, 0)), 2) as utilization
-      FROM hourly_slots
-      ORDER BY hour
-    `),
-
-    // Weekly utilization
-    db.execute(sql`
-      SELECT 
-        EXTRACT(DOW FROM booking_date) as day_of_week,
-        COUNT(*) as bookings,
-        COUNT(DISTINCT provider_id) * 4 as estimated_slots -- rough estimate
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-        AND status IN ('confirmed', 'completed')
-      GROUP BY EXTRACT(DOW FROM booking_date)
-      ORDER BY day_of_week
-    `),
-
-    // Providers with low utilization
-    db.execute(sql`
-      WITH provider_utilization AS (
-        SELECT 
-          p.id as provider_id,
-          p.display_name as provider_name,
-          COUNT(b.id) as total_bookings,
-          COUNT(pa.id) * 30 as estimated_available_slots -- rough estimate
-        FROM providers p
-        LEFT JOIN bookings b ON p.id = b.provider_id 
-          AND b.booking_date BETWEEN ${startDate} AND ${endDate}
-          AND b.status IN ('confirmed', 'completed')
-        LEFT JOIN provider_availability pa ON p.id = pa.provider_id AND pa.is_active = true
-        WHERE p.is_active = true
-        GROUP BY p.id, p.display_name
-      )
-      SELECT 
-        provider_id,
-        provider_name,
-        ROUND((total_bookings * 100.0 / NULLIF(estimated_available_slots, 0)), 2) as utilization_rate
-      FROM provider_utilization
-      WHERE estimated_available_slots > 0
-      ORDER BY utilization_rate ASC
-      LIMIT 10
-    `)
-  ]);
-
-  return {
-    averageAvailabilityPerProvider: parseFloat(availabilityStats.rows[0]?.avg_availability || '0'),
-    peakBookingHours: hourlyUtilization.rows.map((row: any) => ({
-      hour: parseInt(row.hour),
-      utilization: parseFloat(row.utilization)
-    })),
-    utilizationByDayOfWeek: weeklyUtilization.rows.map((row: any) => ({
-      dayOfWeek: parseInt(row.day_of_week),
-      utilization: parseFloat((row.bookings * 100 / row.estimated_slots).toFixed(2))
-    })),
-    providersWithLowUtilization: lowUtilizationProviders.rows.map((row: any) => ({
-      providerId: row.provider_id,
-      providerName: row.provider_name,
-      utilizationRate: parseFloat(row.utilization_rate)
-    }))
-  };
-}
-
-// ===========================
-// BOOKING SUCCESS RATE ANALYSIS
-// ===========================
-
-export interface BookingSuccessMetrics {
-  overallSuccessRate: number;
-  successRateByService: Array<{ serviceName: string; successRate: number; totalBookings: number }>;
-  cancellationReasons: Array<{ reason: string; count: number; percentage: number }>;
-  conversionFunnel: {
-    totalAttempts: number;
-    successfulBookings: number;
-    pendingBookings: number;
-    cancelledBookings: number;
-    noShowBookings: number;
-  };
-}
-
-export async function getBookingSuccessMetrics(
-  dateRange?: { start: Date; end: Date }
-): Promise<BookingSuccessMetrics> {
-  const startDate = dateRange?.start || subDays(new Date(), 30);
-  const endDate = dateRange?.end || new Date();
-
-  const [
-    overallStats,
-    serviceSuccessRates,
-    cancellationReasons,
-    funnelStats
-  ] = await Promise.all([
-    // Overall success rate
-    db.execute(sql`
-      SELECT 
-        COUNT(*) as total_bookings,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful_bookings,
-        ROUND((COUNT(CASE WHEN status = 'completed' THEN 1 END) * 100.0 / COUNT(*)), 2) as success_rate
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-    `),
-
-    // Success rate by service
-    db.execute(sql`
-      SELECT 
-        service_name,
-        COUNT(*) as total_bookings,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful_bookings,
-        ROUND((COUNT(CASE WHEN status = 'completed' THEN 1 END) * 100.0 / COUNT(*)), 2) as success_rate
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY service_name
-      HAVING COUNT(*) >= 5  -- Only services with meaningful data
-      ORDER BY success_rate DESC
-    `),
-
-    // Cancellation reasons
-    db.execute(sql`
-      SELECT 
-        COALESCE(cancellation_reason, 'No reason provided') as reason,
-        COUNT(*) as count,
-        ROUND((COUNT(*) * 100.0 / SUM(COUNT(*)) OVER ()), 2) as percentage
-      FROM ${bookingsTable}
-      WHERE status = 'cancelled' 
-        AND booking_date BETWEEN ${startDate} AND ${endDate}
-      GROUP BY cancellation_reason
-      ORDER BY count DESC
-    `),
-
-    // Conversion funnel
-    db.execute(sql`
-      SELECT 
-        COUNT(*) as total_attempts,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful_bookings,
-        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_bookings,
-        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_bookings,
-        COUNT(CASE WHEN status = 'no_show' THEN 1 END) as no_show_bookings
-      FROM ${bookingsTable}
-      WHERE booking_date BETWEEN ${startDate} AND ${endDate}
-    `)
-  ]);
-
-  const overall = overallStats.rows[0] || {};
-  const funnel = funnelStats.rows[0] || {};
-
-  return {
-    overallSuccessRate: parseFloat(overall.success_rate || '0'),
-    successRateByService: serviceSuccessRates.rows.map((row: any) => ({
-      serviceName: row.service_name,
-      successRate: parseFloat(row.success_rate),
-      totalBookings: parseInt(row.total_bookings)
-    })),
-    cancellationReasons: cancellationReasons.rows.map((row: any) => ({
-      reason: row.reason,
-      count: parseInt(row.count),
-      percentage: parseFloat(row.percentage)
-    })),
-    conversionFunnel: {
-      totalAttempts: parseInt(funnel.total_attempts || '0'),
-      successfulBookings: parseInt(funnel.successful_bookings || '0'),
-      pendingBookings: parseInt(funnel.pending_bookings || '0'),
-      cancelledBookings: parseInt(funnel.cancelled_bookings || '0'),
-      noShowBookings: parseInt(funnel.no_show_bookings || '0')
-    }
-  };
-}
-
-// ===========================
-// UTILITY FUNCTIONS
-// ===========================
-
-/**
- * Get real-time platform health metrics
- */
-export async function getPlatformHealthMetrics(): Promise<{
-  activeBookingsToday: number;
-  pendingBookingsCount: number;
-  systemLoad: number;
-  averageResponseTime: number;
-}> {
-  const today = new Date();
-  const startOfToday = startOfDay(today);
-  const endOfToday = endOfDay(today);
-
-  const [
-    todayBookings,
-    pendingBookings
-  ] = await Promise.all([
-    db
-      .select({ count: count() })
-      .from(bookingsTable)
-      .where(
-        and(
-          between(bookingsTable.bookingDate, startOfToday, endOfToday),
-          sql`${bookingsTable.status} IN ('confirmed', 'completed')`
-        )
-      ),
-
-    db
-      .select({ count: count() })
-      .from(bookingsTable)
-      .where(eq(bookingsTable.status, 'pending'))
-  ]);
-
-  return {
-    activeBookingsToday: todayBookings[0]?.count || 0,
-    pendingBookingsCount: pendingBookings[0]?.count || 0,
-    systemLoad: 0, // Would integrate with system monitoring
-    averageResponseTime: 0 // Would integrate with APM tools
+    start: new Date(current.start.getTime() - duration),
+    end: current.start,
   };
 }
 
 /**
- * Generate data quality report
+ * Get provider earnings data with period comparison
  */
-export async function getDataQualityReport(): Promise<{
-  missingProviderData: number;
-  incompleteBookings: number;
-  orphanedRecords: number;
-  dataIntegrityIssues: string[];
-}> {
-  const [
-    providerDataIssues,
-    bookingDataIssues,
-    orphanedBookings,
-    orphanedTransactions
-  ] = await Promise.all([
-    // Providers missing critical data
-    db
-      .select({ count: count() })
-      .from(providersTable)
-      .where(
-        and(
-          eq(providersTable.isActive, true),
-          sql`(${providersTable.stripeConnectAccountId} IS NULL OR ${providersTable.hourlyRate} IS NULL)`
-        )
-      ),
+export async function getProviderEarnings(
+  providerId: string,
+  period: TimePeriod = '30d'
+): Promise<EarningsData> {
+  const { start, end } = getDateRange(period);
+  const previousPeriod = getPreviousPeriod(period);
 
-    // Bookings with missing payment info
-    db
-      .select({ count: count() })
-      .from(bookingsTable)
-      .where(
-        and(
-          eq(bookingsTable.status, 'completed'),
-          sql`${bookingsTable.stripePaymentIntentId} IS NULL`
-        )
-      ),
+  // Current period earnings
+  const currentEarnings = await db
+    .select({
+      totalEarnings: sum(bookingsTable.providerPayout).mapWith(Number),
+      totalBookings: count(),
+      platformFees: sum(bookingsTable.platformFee).mapWith(Number),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    );
 
-    // Orphaned bookings (provider doesn't exist)
-    db.execute(sql`
-      SELECT COUNT(*) as count
-      FROM ${bookingsTable} b
-      LEFT JOIN ${providersTable} p ON b.provider_id = p.id
-      WHERE p.id IS NULL
-    `),
+  // Previous period for comparison
+  const previousEarnings = await db
+    .select({
+      totalEarnings: sum(bookingsTable.providerPayout).mapWith(Number),
+      totalBookings: count(),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, previousPeriod.start),
+        lte(bookingsTable.createdAt, previousPeriod.end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    );
 
-    // Orphaned transactions (booking doesn't exist)
-    db.execute(sql`
-      SELECT COUNT(*) as count
-      FROM ${transactionsTable} t
-      LEFT JOIN ${bookingsTable} b ON t.booking_id = b.id
-      WHERE b.id IS NULL
-    `)
-  ]);
+  // Pending and completed payouts
+  const payoutStatus = await db
+    .select({
+      pendingPayouts: sql<number>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'pending' THEN ${transactionsTable.providerPayout} END), 0)`.mapWith(Number),
+      completedPayouts: sql<number>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.providerPayout} END), 0)`.mapWith(Number),
+    })
+    .from(transactionsTable)
+    .innerJoin(bookingsTable, eq(transactionsTable.bookingId, bookingsTable.id))
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    );
 
-  const issues: string[] = [];
-  const missingProviderData = providerDataIssues[0]?.count || 0;
-  const incompleteBookings = bookingDataIssues[0]?.count || 0;
-  const orphanedBookingsCount = parseInt(orphanedBookings.rows[0]?.count || '0');
-  const orphanedTransactionsCount = parseInt(orphanedTransactions.rows[0]?.count || '0');
+  // Daily earnings trend
+  const dailyEarnings = await db
+    .select({
+      date: sql<string>`DATE(${bookingsTable.createdAt})`,
+      earnings: sum(bookingsTable.providerPayout).mapWith(Number),
+      bookings: count(),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    )
+    .groupBy(sql`DATE(${bookingsTable.createdAt})`)
+    .orderBy(sql`DATE(${bookingsTable.createdAt})`);
 
-  if (missingProviderData > 0) {
-    issues.push(`${missingProviderData} active providers missing Stripe or pricing data`);
-  }
-  if (incompleteBookings > 0) {
-    issues.push(`${incompleteBookings} completed bookings missing payment information`);
-  }
-  if (orphanedBookingsCount > 0) {
-    issues.push(`${orphanedBookingsCount} bookings reference non-existent providers`);
-  }
-  if (orphanedTransactionsCount > 0) {
-    issues.push(`${orphanedTransactionsCount} transactions reference non-existent bookings`);
-  }
+  // Monthly trends
+  const monthlyTrends = await db
+    .select({
+      month: sql<string>`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`,
+      earnings: sum(bookingsTable.providerPayout).mapWith(Number),
+      bookings: count(),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    )
+    .groupBy(sql`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`)
+    .orderBy(sql`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`);
+
+  const current = currentEarnings[0] || { totalEarnings: 0, totalBookings: 0, platformFees: 0 };
+  const previous = previousEarnings[0] || { totalEarnings: 0, totalBookings: 0 };
+  const payouts = payoutStatus[0] || { pendingPayouts: 0, completedPayouts: 0 };
+
+  const averageBookingValue = current.totalBookings > 0 ? current.totalEarnings / current.totalBookings : 0;
+  const previousAverageValue = previous.totalBookings > 0 ? previous.totalEarnings / previous.totalBookings : 0;
 
   return {
-    missingProviderData,
-    incompleteBookings,
-    orphanedRecords: orphanedBookingsCount + orphanedTransactionsCount,
-    dataIntegrityIssues: issues
+    totalEarnings: current.totalEarnings || 0,
+    totalBookings: current.totalBookings || 0,
+    averageBookingValue,
+    platformFees: current.platformFees || 0,
+    pendingPayouts: payouts.pendingPayouts || 0,
+    completedPayouts: payouts.completedPayouts || 0,
+    periodComparison: {
+      earningsChange: previous.totalEarnings ? 
+        ((current.totalEarnings - previous.totalEarnings) / previous.totalEarnings) * 100 : 0,
+      bookingsChange: previous.totalBookings ? 
+        ((current.totalBookings - previous.totalBookings) / previous.totalBookings) * 100 : 0,
+      averageValueChange: previousAverageValue ? 
+        ((averageBookingValue - previousAverageValue) / previousAverageValue) * 100 : 0,
+    },
+    dailyEarnings: dailyEarnings.map(d => ({
+      date: d.date,
+      earnings: d.earnings || 0,
+      bookings: d.bookings || 0,
+    })),
+    monthlyTrends: monthlyTrends.map(m => ({
+      month: m.month,
+      earnings: m.earnings || 0,
+      bookings: m.bookings || 0,
+    })),
+  };
+}
+
+/**
+ * Get booking metrics and status distribution
+ */
+export async function getBookingMetrics(
+  providerId: string,
+  period: TimePeriod = '30d'
+): Promise<BookingMetrics> {
+  const { start, end } = getDateRange(period);
+
+  // Overall booking stats
+  const bookingStats = await db
+    .select({
+      totalBookings: count(),
+      completedBookings: sql<number>`SUM(CASE WHEN ${bookingsTable.status} = 'completed' THEN 1 ELSE 0 END)`.mapWith(Number),
+      cancelledBookings: sql<number>`SUM(CASE WHEN ${bookingsTable.status} = 'cancelled' THEN 1 ELSE 0 END)`.mapWith(Number),
+      noShowBookings: sql<number>`SUM(CASE WHEN ${bookingsTable.status} = 'no_show' THEN 1 ELSE 0 END)`.mapWith(Number),
+      averageValue: avg(bookingsTable.providerPayout).mapWith(Number),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    );
+
+  // Booking status distribution
+  const statusDistribution = await db
+    .select({
+      status: bookingsTable.status,
+      count: count(),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    )
+    .groupBy(bookingsTable.status);
+
+  // Daily booking trends by status
+  const bookingTrends = await db
+    .select({
+      date: sql<string>`DATE(${bookingsTable.createdAt})`,
+      pending: sql<number>`SUM(CASE WHEN ${bookingsTable.status} = 'pending' THEN 1 ELSE 0 END)`.mapWith(Number),
+      confirmed: sql<number>`SUM(CASE WHEN ${bookingsTable.status} = 'confirmed' THEN 1 ELSE 0 END)`.mapWith(Number),
+      completed: sql<number>`SUM(CASE WHEN ${bookingsTable.status} = 'completed' THEN 1 ELSE 0 END)`.mapWith(Number),
+      cancelled: sql<number>`SUM(CASE WHEN ${bookingsTable.status} = 'cancelled' THEN 1 ELSE 0 END)`.mapWith(Number),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    )
+    .groupBy(sql`DATE(${bookingsTable.createdAt})`)
+    .orderBy(sql`DATE(${bookingsTable.createdAt})`);
+
+  // Peak hours analysis
+  const peakHours = await db
+    .select({
+      hour: sql<number>`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`.mapWith(Number),
+      bookings: count(),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    )
+    .groupBy(sql`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`)
+    .orderBy(sql`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`);
+
+  const stats = bookingStats[0] || { 
+    totalBookings: 0, completedBookings: 0, cancelledBookings: 0, noShowBookings: 0, averageValue: 0 
+  };
+
+  const total = stats.totalBookings || 1;
+  const bookingsByStatus = statusDistribution.map(s => ({
+    status: s.status,
+    count: s.count,
+    percentage: (s.count / total) * 100,
+  }));
+
+  return {
+    totalBookings: stats.totalBookings || 0,
+    completedBookings: stats.completedBookings || 0,
+    cancelledBookings: stats.cancelledBookings || 0,
+    noShowBookings: stats.noShowBookings || 0,
+    completionRate: total > 0 ? (stats.completedBookings / total) * 100 : 0,
+    cancellationRate: total > 0 ? (stats.cancelledBookings / total) * 100 : 0,
+    averageBookingValue: stats.averageValue || 0,
+    bookingsByStatus,
+    bookingTrends: bookingTrends.map(t => ({
+      date: t.date,
+      pending: t.pending || 0,
+      confirmed: t.confirmed || 0,
+      completed: t.completed || 0,
+      cancelled: t.cancelled || 0,
+    })),
+    peakHours: peakHours.map(h => ({
+      hour: h.hour,
+      bookings: h.bookings,
+    })),
+  };
+}
+
+/**
+ * Get customer metrics and retention analysis
+ */
+export async function getCustomerMetrics(
+  providerId: string,
+  period: TimePeriod = '30d'
+): Promise<CustomerMetrics> {
+  const { start, end } = getDateRange(period);
+
+  // Customer stats
+  const customerStats = await db
+    .select({
+      totalCustomers: sql<number>`COUNT(DISTINCT ${bookingsTable.customerId})`.mapWith(Number),
+      totalBookings: count(),
+      totalSpent: sum(bookingsTable.providerPayout).mapWith(Number),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    );
+
+  // Customer retention analysis
+  const customerRetention = await db
+    .select({
+      customerId: bookingsTable.customerId,
+      bookingCount: count(),
+      totalSpent: sum(bookingsTable.providerPayout).mapWith(Number),
+      firstBooking: sql<Date>`MIN(${bookingsTable.createdAt})`,
+      lastBooking: sql<Date>`MAX(${bookingsTable.createdAt})`,
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    )
+    .groupBy(bookingsTable.customerId)
+    .orderBy(desc(sql`SUM(${bookingsTable.providerPayout})`))
+    .limit(10);
+
+  // New vs returning customers by date
+  const customerAcquisition = await db
+    .select({
+      date: sql<string>`DATE(${bookingsTable.createdAt})`,
+      newCustomers: sql<number>`COUNT(DISTINCT CASE WHEN first_booking_date = DATE(${bookingsTable.createdAt}) THEN ${bookingsTable.customerId} END)`.mapWith(Number),
+      returningCustomers: sql<number>`COUNT(DISTINCT CASE WHEN first_booking_date < DATE(${bookingsTable.createdAt}) THEN ${bookingsTable.customerId} END)`.mapWith(Number),
+    })
+    .from(sql`(
+      SELECT 
+        *,
+        MIN(DATE(created_at)) OVER (PARTITION BY customer_id) as first_booking_date
+      FROM ${bookingsTable}
+      WHERE ${bookingsTable.providerId} = ${providerId}
+        AND ${bookingsTable.createdAt} >= ${start}
+        AND ${bookingsTable.createdAt} <= ${end}
+        AND ${bookingsTable.status} IN ('completed', 'confirmed')
+    ) as bookings_with_first_date`)
+    .groupBy(sql`DATE(created_at)`)
+    .orderBy(sql`DATE(created_at)`);
+
+  const stats = customerStats[0] || { totalCustomers: 0, totalBookings: 0, totalSpent: 0 };
+  const returningCustomers = customerRetention.filter(c => c.bookingCount > 1).length;
+  const newCustomers = stats.totalCustomers - returningCustomers;
+
+  return {
+    totalCustomers: stats.totalCustomers || 0,
+    returningCustomers,
+    newCustomers,
+    customerRetentionRate: stats.totalCustomers > 0 ? (returningCustomers / stats.totalCustomers) * 100 : 0,
+    averageBookingsPerCustomer: stats.totalCustomers > 0 ? stats.totalBookings / stats.totalCustomers : 0,
+    customerLifetimeValue: stats.totalCustomers > 0 ? stats.totalSpent / stats.totalCustomers : 0,
+    topCustomers: customerRetention.map(c => ({
+      customerId: c.customerId,
+      totalBookings: c.bookingCount,
+      totalSpent: c.totalSpent || 0,
+      lastBookingDate: c.lastBooking.toISOString().split('T')[0],
+    })),
+    customerAcquisition: customerAcquisition.map(c => ({
+      date: c.date,
+      newCustomers: c.newCustomers || 0,
+      returningCustomers: c.returningCustomers || 0,
+    })),
+  };
+}
+
+/**
+ * Get performance metrics including ratings and response times
+ */
+export async function getPerformanceMetrics(
+  providerId: string,
+  period: TimePeriod = '30d'
+): Promise<PerformanceMetrics> {
+  const { start, end } = getDateRange(period);
+
+  // Rating stats
+  const ratingStats = await db
+    .select({
+      averageRating: avg(reviewsTable.rating).mapWith(Number),
+      totalReviews: count(),
+    })
+    .from(reviewsTable)
+    .innerJoin(bookingsTable, eq(reviewsTable.bookingId, bookingsTable.id))
+    .where(
+      and(
+        eq(reviewsTable.providerId, providerId),
+        eq(reviewsTable.isPublished, true),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    );
+
+  // Rating distribution
+  const ratingDistribution = await db
+    .select({
+      rating: reviewsTable.rating,
+      count: count(),
+    })
+    .from(reviewsTable)
+    .innerJoin(bookingsTable, eq(reviewsTable.bookingId, bookingsTable.id))
+    .where(
+      and(
+        eq(reviewsTable.providerId, providerId),
+        eq(reviewsTable.isPublished, true),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    )
+    .groupBy(reviewsTable.rating)
+    .orderBy(reviewsTable.rating);
+
+  // Recent reviews
+  const recentReviews = await db
+    .select({
+      rating: reviewsTable.rating,
+      reviewText: reviewsTable.reviewText,
+      customerId: reviewsTable.customerId,
+      createdAt: reviewsTable.createdAt,
+      serviceName: bookingsTable.serviceName,
+    })
+    .from(reviewsTable)
+    .innerJoin(bookingsTable, eq(reviewsTable.bookingId, bookingsTable.id))
+    .where(
+      and(
+        eq(reviewsTable.providerId, providerId),
+        eq(reviewsTable.isPublished, true),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    )
+    .orderBy(desc(reviewsTable.createdAt))
+    .limit(10);
+
+  // Rating trends by month
+  const ratingTrends = await db
+    .select({
+      month: sql<string>`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`,
+      averageRating: avg(reviewsTable.rating).mapWith(Number),
+      reviewCount: count(),
+    })
+    .from(reviewsTable)
+    .innerJoin(bookingsTable, eq(reviewsTable.bookingId, bookingsTable.id))
+    .where(
+      and(
+        eq(reviewsTable.providerId, providerId),
+        eq(reviewsTable.isPublished, true),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    )
+    .groupBy(sql`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`)
+    .orderBy(sql`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`);
+
+  // Response time analysis (time from booking creation to confirmation)
+  const responseTimeData = await db
+    .select({
+      avgResponseTime: sql<number>`AVG(EXTRACT(EPOCH FROM (${bookingsTable.updatedAt} - ${bookingsTable.createdAt})) / 3600)`.mapWith(Number),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        eq(bookingsTable.status, 'confirmed'),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end)
+      )
+    );
+
+  const stats = ratingStats[0] || { averageRating: 0, totalReviews: 0 };
+  const totalReviews = stats.totalReviews || 1;
+  
+  return {
+    averageRating: stats.averageRating || 0,
+    totalReviews: stats.totalReviews || 0,
+    ratingDistribution: ratingDistribution.map(r => ({
+      rating: r.rating,
+      count: r.count,
+      percentage: (r.count / totalReviews) * 100,
+    })),
+    responseTime: responseTimeData[0]?.avgResponseTime || 0,
+    onTimeRate: 95, // TODO: Calculate based on booking times vs actual completion
+    customerSatisfactionScore: stats.averageRating ? (stats.averageRating / 5) * 100 : 0,
+    recentReviews: recentReviews.map(r => ({
+      rating: r.rating,
+      reviewText: r.reviewText || '',
+      customerName: r.customerId, // TODO: Join with customer name when available
+      createdAt: r.createdAt.toISOString().split('T')[0],
+      serviceName: r.serviceName,
+    })),
+    ratingTrends: ratingTrends.map(t => ({
+      month: t.month,
+      averageRating: t.averageRating || 0,
+      reviewCount: t.reviewCount || 0,
+    })),
+  };
+}
+
+/**
+ * Get revenue breakdown by various dimensions
+ */
+export async function getRevenueBreakdown(
+  providerId: string,
+  period: TimePeriod = '30d'
+): Promise<RevenueBreakdown> {
+  const { start, end } = getDateRange(period);
+
+  // Revenue by service
+  const byService = await db
+    .select({
+      serviceName: bookingsTable.serviceName,
+      bookings: count(),
+      revenue: sum(bookingsTable.providerPayout).mapWith(Number),
+      averagePrice: avg(bookingsTable.providerPayout).mapWith(Number),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    )
+    .groupBy(bookingsTable.serviceName)
+    .orderBy(desc(sql`SUM(${bookingsTable.providerPayout})`));
+
+  // Revenue by month
+  const byMonth = await db
+    .select({
+      month: sql<string>`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`,
+      revenue: sum(bookingsTable.providerPayout).mapWith(Number),
+      bookings: count(),
+      averageValue: avg(bookingsTable.providerPayout).mapWith(Number),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    )
+    .groupBy(sql`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`)
+    .orderBy(sql`TO_CHAR(${bookingsTable.createdAt}, 'YYYY-MM')`);
+
+  // Revenue by day of week
+  const byDayOfWeek = await db
+    .select({
+      dayIndex: sql<number>`EXTRACT(DOW FROM ${bookingsTable.bookingDate})`.mapWith(Number),
+      revenue: sum(bookingsTable.providerPayout).mapWith(Number),
+      bookings: count(),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    )
+    .groupBy(sql`EXTRACT(DOW FROM ${bookingsTable.bookingDate})`)
+    .orderBy(sql`EXTRACT(DOW FROM ${bookingsTable.bookingDate})`);
+
+  // Revenue by time of day
+  const byTimeOfDay = await db
+    .select({
+      hour: sql<number>`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`.mapWith(Number),
+      revenue: sum(bookingsTable.providerPayout).mapWith(Number),
+      bookings: count(),
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    )
+    .groupBy(sql`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`)
+    .orderBy(sql`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`);
+
+  const totalRevenue = byService.reduce((sum, service) => sum + (service.revenue || 0), 0) || 1;
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  return {
+    byService: byService.map(s => ({
+      serviceName: s.serviceName,
+      bookings: s.bookings,
+      revenue: s.revenue || 0,
+      averagePrice: s.averagePrice || 0,
+      percentage: ((s.revenue || 0) / totalRevenue) * 100,
+    })),
+    byMonth: byMonth.map(m => ({
+      month: m.month,
+      revenue: m.revenue || 0,
+      bookings: m.bookings,
+      averageValue: m.averageValue || 0,
+    })),
+    byDayOfWeek: byDayOfWeek.map(d => ({
+      dayName: dayNames[d.dayIndex] || 'Unknown',
+      dayIndex: d.dayIndex,
+      revenue: d.revenue || 0,
+      bookings: d.bookings,
+    })),
+    byTimeOfDay: byTimeOfDay.map(t => ({
+      hour: t.hour,
+      revenue: t.revenue || 0,
+      bookings: t.bookings,
+    })),
+  };
+}
+
+/**
+ * Get top performing services analysis
+ */
+export async function getTopServices(
+  providerId: string,
+  period: TimePeriod = '30d'
+): Promise<TopServices> {
+  const { start, end } = getDateRange(period);
+
+  // Services with booking count, revenue, and ratings
+  const serviceStats = await db
+    .select({
+      serviceName: bookingsTable.serviceName,
+      bookings: count(),
+      revenue: sum(bookingsTable.providerPayout).mapWith(Number),
+      averagePrice: avg(bookingsTable.providerPayout).mapWith(Number),
+      averageRating: avg(reviewsTable.rating).mapWith(Number),
+      reviewCount: sql<number>`COUNT(${reviewsTable.rating})`.mapWith(Number),
+    })
+    .from(bookingsTable)
+    .leftJoin(reviewsTable, and(
+      eq(reviewsTable.bookingId, bookingsTable.id),
+      eq(reviewsTable.isPublished, true)
+    ))
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.createdAt, start),
+        lte(bookingsTable.createdAt, end),
+        sql`${bookingsTable.status} IN ('completed', 'confirmed')`
+      )
+    )
+    .groupBy(bookingsTable.serviceName)
+    .orderBy(desc(count()));
+
+  const mostBooked = [...serviceStats]
+    .sort((a, b) => b.bookings - a.bookings)
+    .slice(0, 10)
+    .map(s => ({
+      serviceName: s.serviceName,
+      bookings: s.bookings,
+      revenue: s.revenue || 0,
+      averageRating: s.averageRating || 0,
+      averagePrice: s.averagePrice || 0,
+    }));
+
+  const highestRevenue = [...serviceStats]
+    .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+    .slice(0, 10)
+    .map(s => ({
+      serviceName: s.serviceName,
+      revenue: s.revenue || 0,
+      bookings: s.bookings,
+      averagePrice: s.averagePrice || 0,
+      profitMargin: 90, // 90% after 10% platform fee
+    }));
+
+  const bestRated = [...serviceStats]
+    .filter(s => (s.reviewCount || 0) >= 3) // Minimum 3 reviews for reliability
+    .sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0))
+    .slice(0, 10)
+    .map(s => ({
+      serviceName: s.serviceName,
+      averageRating: s.averageRating || 0,
+      reviewCount: s.reviewCount || 0,
+      bookings: s.bookings,
+      revenue: s.revenue || 0,
+    }));
+
+  return {
+    mostBooked,
+    highestRevenue,
+    bestRated,
   };
 }

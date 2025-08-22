@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   ShieldCheck,
   Lock,
-  AlertCircle
+  AlertCircle,
+  UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,10 +26,12 @@ import { BookingCalendar } from "./BookingCalendar";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { BookingSummary } from "./BookingSummary";
 import { StripeWrapper } from "@/components/payment/StripeWrapper";
+import { GuestInfoForm } from "./GuestInfoForm";
 import { createBookingAction } from "@/actions/bookings-actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { useGuestCheckout } from "@/contexts/guest-checkout-context";
 
 interface BookingFlowProps {
   provider: {
@@ -53,7 +56,7 @@ interface BookingFlowProps {
   onServiceSelect?: (service: any) => void;
 }
 
-type BookingStep = "service" | "date" | "time" | "confirm" | "payment";
+type BookingStep = "service" | "date" | "time" | "confirm" | "guest" | "payment";
 
 export function BookingFlow({ 
   provider, 
@@ -62,6 +65,7 @@ export function BookingFlow({
 }: BookingFlowProps) {
   const router = useRouter();
   const { isSignedIn } = useAuth();
+  const { isGuestCheckout, guestInfo } = useGuestCheckout();
   
   // Booking state
   const [currentStep, setCurrentStep] = useState<BookingStep>(
@@ -75,10 +79,21 @@ export function BookingFlow({
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
 
-  // Calculate step progress
-  const steps: BookingStep[] = selectedService 
-    ? ["date", "time", "confirm", "payment"]
-    : ["service", "date", "time", "confirm", "payment"];
+  // Calculate step progress - include guest step if not signed in
+  const getSteps = (): BookingStep[] => {
+    const baseSteps: BookingStep[] = selectedService 
+      ? ["date", "time", "confirm"]
+      : ["service", "date", "time", "confirm"];
+    
+    // Add guest step before payment if not signed in
+    if (!isSignedIn) {
+      return [...baseSteps, "guest", "payment"] as BookingStep[];
+    }
+    
+    return [...baseSteps, "payment"] as BookingStep[];
+  };
+  
+  const steps = getSteps();
     
   const currentStepIndex = steps.indexOf(currentStep);
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
@@ -104,6 +119,11 @@ export function BookingFlow({
       title: "Review & Confirm",
       icon: <CheckCircle className="h-5 w-5" />,
       description: "Review your booking details",
+    },
+    guest: {
+      title: "Guest Information",
+      icon: <UserPlus className="h-5 w-5" />,
+      description: "Provide your contact details",
     },
     payment: {
       title: "Payment",
@@ -144,15 +164,18 @@ export function BookingFlow({
         return !!selectedTime;
       case "confirm":
         return true;
+      case "guest":
+        return isGuestCheckout && !!guestInfo;
       default:
         return false;
     }
   };
 
   const handleCreateBooking = async () => {
-    if (!isSignedIn) {
-      toast.error("Please sign in to complete your booking");
-      router.push("/login");
+    // For non-authenticated users, check if we have guest info
+    if (!isSignedIn && !isGuestCheckout) {
+      // Move to guest information step
+      setCurrentStep("guest");
       return;
     }
 
@@ -175,24 +198,39 @@ export function BookingFlow({
         "HH:mm"
       );
 
-      const result = await createBookingAction({
-        providerId: provider.id,
-        serviceName: selectedService.name,
-        servicePrice: selectedService.price,
-        serviceDuration: selectedService.duration,
-        bookingDate: selectedDate,
-        startTime,
-        endTime,
-        customerNotes: customerNotes || undefined,
+      // Use the guest booking API endpoint
+      const response = await fetch("/api/bookings/guest", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          providerId: provider.id,
+          serviceName: selectedService.name,
+          servicePrice: selectedService.price,
+          serviceDuration: selectedService.duration,
+          bookingDate: selectedDate.toISOString(),
+          startTime,
+          endTime,
+          customerNotes: customerNotes || undefined,
+          // Include guest info if guest checkout
+          guestInfo: !isSignedIn && guestInfo ? guestInfo : undefined,
+        }),
       });
 
-      if (result.isSuccess && result.data) {
-        toast.success("Booking created! Proceeding to payment...");
-        setCreatedBookingId(result.data.id);
+      const result = await response.json();
+
+      if (response.ok && result.booking) {
+        // Show fee breakdown for transparency
+        const message = isSignedIn 
+          ? "Booking created! Proceeding to payment..." 
+          : "Booking created! (10% guest surcharge applied) Proceeding to payment...";
+        toast.success(message);
+        setCreatedBookingId(result.booking.id);
         handleNext(); // Move to payment step
       } else {
-        setBookingError(result.message || "Failed to create booking");
-        toast.error(result.message || "Failed to create booking");
+        setBookingError(result.error || "Failed to create booking");
+        toast.error(result.error || "Failed to create booking");
       }
     } catch (error) {
       console.error("Booking error:", error);
@@ -333,6 +371,15 @@ export function BookingFlow({
               selectedTime={selectedTime}
               onSelectTime={setSelectedTime}
               serviceDuration={selectedService?.duration}
+            />
+          )}
+
+          {/* Guest Information */}
+          {currentStep === "guest" && (
+            <GuestInfoForm 
+              onSubmit={() => {
+                handleCreateBooking();
+              }}
             />
           )}
 

@@ -31,6 +31,16 @@ export type AvailableSlot = {
   slots: TimeSlot[];
 };
 
+// Generate a unique confirmation code
+function generateConfirmationCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
 // Create a new booking with conflict detection
 export async function createBooking(data: NewBooking): Promise<Booking> {
   // Use a transaction to ensure atomicity and prevent double-booking
@@ -117,10 +127,20 @@ export async function createBooking(data: NewBooking): Promise<Booking> {
       }
     }
 
+    // Generate confirmation code if not provided
+    const confirmationCode = data.confirmationCode || generateConfirmationCode();
+
+    // Create the booking with confirmation code
+    const bookingData = {
+      ...data,
+      confirmationCode,
+      isGuestBooking: data.isGuestBooking || false,
+    };
+
     // Create the booking
     const [newBooking] = await tx
       .insert(bookingsTable)
-      .values(data)
+      .values(bookingData)
       .returning();
 
     return newBooking;
@@ -577,6 +597,162 @@ export async function getUpcomingBookingsForReminders(
         )
       )
     );
+}
+
+// Cancel a booking with proper validation and reason tracking
+export async function cancelBooking(
+  bookingId: string,
+  reason: string,
+  cancelledBy: string
+): Promise<Booking> {
+  return await db.transaction(async (tx) => {
+    const [booking] = await tx
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, bookingId));
+
+    if (!booking) {
+      throw new Error("Booking not found");
+    }
+
+    // Check if booking can be cancelled
+    if (booking.status === bookingStatus.COMPLETED || 
+        booking.status === bookingStatus.CANCELLED) {
+      throw new Error(`Cannot cancel booking with status: ${booking.status}`);
+    }
+
+    // Check cancellation policy (24 hours notice by default)
+    const hoursUntilBooking = Math.floor(
+      (booking.bookingDate.getTime() - Date.now()) / (1000 * 60 * 60)
+    );
+
+    let cancellationFee = 0;
+    if (hoursUntilBooking < 24 && booking.status === bookingStatus.CONFIRMED) {
+      // Late cancellation - may incur fees
+      cancellationFee = parseFloat(booking.totalAmount.toString()) * 0.25; // 25% fee
+    }
+
+    const [updatedBooking] = await tx
+      .update(bookingsTable)
+      .set({
+        status: bookingStatus.CANCELLED,
+        cancellationReason: reason,
+        cancelledBy,
+        cancelledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(bookingsTable.id, bookingId))
+      .returning();
+
+    // If there's a cancellation fee, create a transaction record
+    if (cancellationFee > 0 && booking.stripePaymentIntentId) {
+      await tx.insert(transactionsTable).values({
+        bookingId,
+        amount: cancellationFee.toString(),
+        platformFee: (cancellationFee * 0.1).toString(), // 10% platform fee on cancellation fee
+        providerPayout: (cancellationFee * 0.9).toString(),
+        status: "completed",
+        processedAt: new Date(),
+      });
+    }
+
+    return updatedBooking;
+  });
+}
+
+// Complete a booking
+export async function completeBooking(
+  bookingId: string,
+  completedBy: string,
+  notes?: string
+): Promise<Booking> {
+  const [booking] = await db
+    .select()
+    .from(bookingsTable)
+    .where(eq(bookingsTable.id, bookingId));
+
+  if (!booking) {
+    throw new Error("Booking not found");
+  }
+
+  if (booking.status !== bookingStatus.CONFIRMED) {
+    throw new Error(`Cannot complete booking with status: ${booking.status}`);
+  }
+
+  const [updatedBooking] = await db
+    .update(bookingsTable)
+    .set({
+      status: bookingStatus.COMPLETED,
+      completedAt: new Date(),
+      providerNotes: notes,
+      updatedAt: new Date(),
+    })
+    .where(eq(bookingsTable.id, bookingId))
+    .returning();
+
+  return updatedBooking;
+}
+
+// Get upcoming bookings for a provider
+export async function getUpcomingBookings(
+  providerId: string,
+  limit: number = 10
+): Promise<Booking[]> {
+  const now = new Date();
+  
+  return await db
+    .select()
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.providerId, providerId),
+        gte(bookingsTable.bookingDate, now),
+        or(
+          eq(bookingsTable.status, bookingStatus.PENDING),
+          eq(bookingsTable.status, bookingStatus.CONFIRMED)
+        )
+      )
+    )
+    .orderBy(asc(bookingsTable.bookingDate), asc(bookingsTable.startTime))
+    .limit(limit);
+}
+
+// Get past bookings for a provider
+export async function getPastBookings(
+  providerId: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<{ bookings: Booking[]; total: number }> {
+  const now = new Date();
+  
+  const conditions = and(
+    eq(bookingsTable.providerId, providerId),
+    or(
+      lte(bookingsTable.bookingDate, now),
+      eq(bookingsTable.status, bookingStatus.COMPLETED),
+      eq(bookingsTable.status, bookingStatus.CANCELLED),
+      eq(bookingsTable.status, bookingStatus.NO_SHOW)
+    )
+  );
+
+  const [bookings, countResult] = await Promise.all([
+    db
+      .select()
+      .from(bookingsTable)
+      .where(conditions)
+      .orderBy(desc(bookingsTable.bookingDate), desc(bookingsTable.startTime))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(bookingsTable)
+      .where(conditions)
+  ]);
+
+  return {
+    bookings,
+    total: countResult[0].count,
+  };
 }
 
 // Automatically mark completed bookings

@@ -391,3 +391,95 @@ export async function hasProviderProfileAction(): Promise<ActionResult<boolean>>
     return { isSuccess: false, message: "Failed to check provider profile" };
   }
 }
+
+// Update provider profile with authorization check
+export async function updateProviderProfileAction(
+  providerId: string,
+  data: Partial<NewProvider>
+): Promise<ActionResult<Provider>> {
+  try {
+    const { userId } = auth();
+    
+    if (!userId) {
+      return { isSuccess: false, message: "User not authenticated" };
+    }
+
+    // Verify the provider belongs to the current user
+    const provider = await getProviderById(providerId);
+    
+    if (!provider) {
+      return { isSuccess: false, message: "Provider not found" };
+    }
+
+    if (provider.userId !== userId) {
+      return { isSuccess: false, message: "Unauthorized to update this profile" };
+    }
+
+    // If display name changed, regenerate slug
+    if (data.displayName && data.displayName !== provider.displayName) {
+      data.slug = await generateUniqueSlug(data.displayName);
+    }
+
+    const updatedProvider = await updateProvider(providerId, data);
+    
+    revalidatePath("/dashboard/provider");
+    revalidatePath("/dashboard/provider/profile");
+    revalidatePath(`/providers/${provider.slug}`);
+    if (data.slug) {
+      revalidatePath(`/providers/${data.slug}`);
+    }
+    
+    return {
+      isSuccess: true,
+      message: "Profile updated successfully",
+      data: updatedProvider,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to update profile";
+    return { isSuccess: false, message: errorMessage };
+  }
+}
+
+// Set provider availability
+export async function setProviderAvailabilityAction(
+  providerId: string,
+  availability: Array<{
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+  }>
+): Promise<ActionResult<ProviderAvailability[]>> {
+  try {
+    const { userId } = auth();
+    
+    if (!userId) {
+      return { isSuccess: false, message: "User not authenticated" };
+    }
+
+    // Verify the provider belongs to the current user
+    const provider = await getProviderById(providerId);
+    
+    if (!provider) {
+      return { isSuccess: false, message: "Provider not found" };
+    }
+
+    if (provider.userId !== userId) {
+      return { isSuccess: false, message: "Unauthorized to update this profile" };
+    }
+
+    const updatedAvailability = await setProviderAvailability(providerId, availability);
+    
+    revalidatePath("/dashboard/provider");
+    revalidatePath("/dashboard/provider/profile");
+    revalidatePath(`/providers/${provider.slug}`);
+    
+    return {
+      isSuccess: true,
+      message: "Availability updated successfully",
+      data: updatedAvailability,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to update availability";
+    return { isSuccess: false, message: errorMessage };
+  }
+}

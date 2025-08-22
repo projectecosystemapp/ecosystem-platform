@@ -65,8 +65,8 @@ export async function GET(
         isVerified: provider.isVerified,
         isActive: provider.isActive,
         services: provider.services,
-        portfolio: provider.portfolio,
-        socialLinks: provider.socialLinks,
+        // portfolio: provider.portfolio, // Field doesn't exist in schema yet
+        // socialLinks: provider.socialLinks, // Field doesn't exist in schema yet
         commissionRate: provider.commissionRate,
         // Show Stripe status for booking availability
         stripeOnboardingComplete: provider.stripeOnboardingComplete,
@@ -151,8 +151,8 @@ export async function PATCH(
       'hourlyRate',
       'currency',
       'services',
-      'portfolio',
-      'socialLinks',
+      // 'portfolio', // Field doesn't exist in schema yet
+      // 'socialLinks', // Field doesn't exist in schema yet
     ];
     
     const updateData: any = {};
@@ -190,8 +190,8 @@ export async function PATCH(
         hourlyRate: updatedProvider.hourlyRate,
         currency: updatedProvider.currency,
         services: updatedProvider.services,
-        portfolio: updatedProvider.portfolio,
-        socialLinks: updatedProvider.socialLinks,
+        // portfolio: updatedProvider.portfolio, // Field doesn't exist in schema yet
+        // socialLinks: updatedProvider.socialLinks, // Field doesn't exist in schema yet
         updatedAt: updatedProvider.updatedAt,
       };
       
