@@ -1,9 +1,13 @@
 import { pgTable, text, uuid, timestamp, numeric, boolean, jsonb, integer } from "drizzle-orm/pg-core";
+import { profilesTable } from "./profiles-schema";
 
 // Main providers table
 export const providersTable = pgTable("providers", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: text("user_id").notNull().unique(), // Will add foreign key constraint in migration
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => profilesTable.userId, { onDelete: "cascade" }), // CASCADE: Delete provider when profile is deleted
   
   // Display information
   displayName: text("display_name").notNull(),
@@ -56,7 +60,9 @@ export const providersTable = pgTable("providers", {
 // Provider testimonials (featured reviews)
 export const providerTestimonialsTable = pgTable("provider_testimonials", {
   id: uuid("id").primaryKey().defaultRandom(),
-  providerId: uuid("provider_id").notNull(), // Will add foreign key constraint in migration
+  providerId: uuid("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "cascade" }), // CASCADE: Delete testimonials when provider is deleted
   
   customerName: text("customer_name").notNull(),
   customerImage: text("customer_image"),
@@ -69,7 +75,9 @@ export const providerTestimonialsTable = pgTable("provider_testimonials", {
 // Provider availability (recurring weekly schedule)
 export const providerAvailabilityTable = pgTable("provider_availability", {
   id: uuid("id").primaryKey().defaultRandom(),
-  providerId: uuid("provider_id").notNull(), // Will add foreign key constraint in migration
+  providerId: uuid("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "cascade" }), // CASCADE: Delete availability when provider is deleted
   
   dayOfWeek: integer("day_of_week").notNull(), // 0 = Sunday, 6 = Saturday
   startTime: text("start_time").notNull(), // Format: "09:00"
@@ -83,7 +91,9 @@ export const providerAvailabilityTable = pgTable("provider_availability", {
 // Provider blocked slots (for vacations, appointments, etc.)
 export const providerBlockedSlotsTable = pgTable("provider_blocked_slots", {
   id: uuid("id").primaryKey().defaultRandom(),
-  providerId: uuid("provider_id").notNull(), // Will add foreign key constraint in migration
+  providerId: uuid("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "cascade" }), // CASCADE: Delete blocked slots when provider is deleted
   
   blockedDate: timestamp("blocked_date").notNull(),
   startTime: text("start_time"), // Null means full day

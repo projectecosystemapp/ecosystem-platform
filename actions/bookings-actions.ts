@@ -31,8 +31,13 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { eq } from "drizzle-orm";
 import { addDays, startOfDay, endOfDay } from "date-fns";
+import { 
+  enforceRateLimit, 
+  handleRateLimitError,
+  withRateLimitAction 
+} from "@/lib/server-action-rate-limit";
 
-// Create a new booking (customer action)
+// Create a new booking (customer action) with rate limiting
 export async function createBookingAction(data: {
   providerId: string;
   serviceName: string;
@@ -44,7 +49,10 @@ export async function createBookingAction(data: {
   customerNotes?: string;
 }): Promise<ActionResult<Booking>> {
   try {
-    const { userId } = auth();
+    // Apply rate limiting for booking creation
+    await enforceRateLimit('booking');
+    
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -86,6 +94,9 @@ export async function createBookingAction(data: {
     };
 
     const newBooking = await createBooking(bookingData);
+    
+    // Audit log for security tracking
+    console.log(`[AUDIT] User ${userId} created booking ${newBooking.id} for provider ${data.providerId} at ${new Date().toISOString()}`);
     
     revalidatePath("/dashboard");
     revalidatePath(`/providers/${provider.slug}`);
@@ -137,7 +148,7 @@ export async function confirmBookingAction(
   stripePaymentIntentId: string
 ): Promise<ActionResult<Booking>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -175,6 +186,9 @@ export async function confirmBookingAction(
       status: "completed",
       processedAt: new Date(),
     });
+    
+    // Audit log for payment confirmation
+    console.log(`[AUDIT] User ${userId} confirmed booking ${bookingId} with payment ${stripePaymentIntentId} at ${new Date().toISOString()}`);
 
     revalidatePath("/dashboard");
     
@@ -195,7 +209,7 @@ export async function cancelBookingAction(
   reason?: string
 ): Promise<ActionResult<Booking>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -245,6 +259,12 @@ export async function cancelBookingAction(
         status: "refunded",
         processedAt: new Date(),
       });
+      
+      // Audit log for refund
+      console.log(`[AUDIT] User ${userId} cancelled booking ${bookingId} with refund at ${new Date().toISOString()}. Reason: ${reason || 'Not specified'}`);
+    } else {
+      // Audit log for cancellation without refund
+      console.log(`[AUDIT] User ${userId} cancelled booking ${bookingId} without refund at ${new Date().toISOString()}. Reason: ${reason || 'Not specified'}`);
     }
 
     revalidatePath("/dashboard");
@@ -265,7 +285,7 @@ export async function getUpcomingBookingsAction(
   userType: "provider" | "customer"
 ): Promise<ActionResult<Booking[]>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -318,7 +338,7 @@ export async function getBookingHistoryAction(
   pageSize: number = 10
 ): Promise<ActionResult<{ bookings: Booking[]; total: number }>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -351,7 +371,7 @@ export async function getProviderBookingsAction(
   }
 ): Promise<ActionResult<{ bookings: Booking[]; total: number }>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -395,7 +415,7 @@ export async function getBookingStatisticsAction(
   dateRange?: { start: Date; end: Date }
 ): Promise<ActionResult<any>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -435,7 +455,7 @@ export async function completeBookingAction(
   notes?: string
 ): Promise<ActionResult<Booking>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -471,6 +491,9 @@ export async function completeBookingAction(
         { processedAt: new Date() }
       );
     }
+    
+    // Audit log for booking completion
+    console.log(`[AUDIT] Provider ${userId} marked booking ${bookingId} as completed at ${new Date().toISOString()}. Notes: ${notes || 'None'}`);
 
     revalidatePath("/dashboard");
     revalidatePath("/provider/bookings");
@@ -495,7 +518,7 @@ export async function markBookingNoShowAction(
   notes?: string
 ): Promise<ActionResult<Booking>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -524,6 +547,9 @@ export async function markBookingNoShowAction(
       bookingStatus.NO_SHOW,
       { providerNotes: notes }
     );
+    
+    // Audit log for no-show marking
+    console.log(`[AUDIT] Provider ${userId} marked booking ${bookingId} as no-show at ${new Date().toISOString()}. Notes: ${notes || 'None'}`);
 
     revalidatePath("/dashboard");
     
@@ -543,7 +569,7 @@ export async function getBookingDetailsAction(
   bookingId: string
 ): Promise<ActionResult<any>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -589,6 +615,20 @@ export async function getBookingDetailsAction(
 // Automatically mark old bookings as completed (scheduled job)
 export async function processCompletedBookingsAction(): Promise<ActionResult<number>> {
   try {
+    // This is a system-level action that should only be called by scheduled jobs
+    // Verify it's being called from an authorized context (e.g., cron job with API key)
+    const { userId } = await auth();
+    
+    // Only allow admin users or system processes to run this
+    if (!userId) {
+      console.error('[SECURITY] Unauthorized attempt to process completed bookings');
+      return { isSuccess: false, message: "Unauthorized: Admin access required" };
+    }
+    
+    // TODO: Add additional check for admin role when role system is implemented
+    // For now, log the action for audit purposes
+    console.log(`[AUDIT] User ${userId} initiated processCompletedBookings at ${new Date().toISOString()}`);
+    
     const completedCount = await markCompletedBookings();
     
     return {

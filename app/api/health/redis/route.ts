@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { HealthMonitor, isRedisConfigured, getRedisStatusMessage } from '@/lib/services/redis.service';
 import { validateRedisConfig } from '@/config/redis.config';
+import { checkRateLimitHealth, getRateLimitAnalytics } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,11 +52,15 @@ export async function GET(request: NextRequest) {
     // Detailed response for authenticated monitoring systems
     const metrics = await HealthMonitor.getMetrics();
     
+    // Check rate limiting health
+    const rateLimitHealth = await checkRateLimitHealth();
+    const rateLimitAnalytics = await getRateLimitAnalytics();
+    
     // Calculate overall status
     let status: 'healthy' | 'degraded' | 'unhealthy';
-    if (health.healthy && Object.values(health.services).every(s => s)) {
+    if (health.healthy && Object.values(health.services).every(s => s) && rateLimitHealth.healthy) {
       status = 'healthy';
-    } else if (health.healthy) {
+    } else if (health.healthy || rateLimitHealth.healthy) {
       status = 'degraded';
     } else {
       status = 'unhealthy';
@@ -77,6 +82,12 @@ export async function GET(request: NextRequest) {
       services: health.services,
       latency: health.latency,
       metrics,
+      rateLimit: {
+        healthy: rateLimitHealth.healthy,
+        usingRedis: rateLimitHealth.usingRedis,
+        error: rateLimitHealth.error,
+        analytics: rateLimitAnalytics,
+      },
       validation: {
         errors: validation.errors,
         warnings: [...validation.warnings, ...latencyWarnings],

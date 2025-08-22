@@ -12,11 +12,15 @@ import {
   unique 
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { providersTable } from "./providers-schema";
+import { bookingsTable } from "./bookings-schema";
 
 // ===== SERVICES TABLE =====
 export const servicesTable = pgTable("services", {
   id: uuid("id").primaryKey().defaultRandom(),
-  providerId: uuid("provider_id").notNull(),
+  providerId: uuid("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "cascade" }), // CASCADE: Delete services when provider is deleted
   
   // Service details
   name: text("name").notNull(),
@@ -89,7 +93,9 @@ export const guestBookingSessionsTable = pgTable("guest_booking_sessions", {
 // ===== BOOKING STATE TRANSITIONS =====
 export const bookingStateTransitionsTable = pgTable("booking_state_transitions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  bookingId: uuid("booking_id").notNull(),
+  bookingId: uuid("booking_id")
+    .notNull()
+    .references(() => bookingsTable.id, { onDelete: "cascade" }), // CASCADE: Delete transitions when booking is deleted
   
   // State change
   fromStatus: text("from_status"),
@@ -123,8 +129,12 @@ export const bookingStateTransitionsTable = pgTable("booking_state_transitions",
 // ===== PAYOUT SCHEDULES =====
 export const payoutSchedulesTable = pgTable("payout_schedules", {
   id: uuid("id").primaryKey().defaultRandom(),
-  bookingId: uuid("booking_id").notNull(),
-  providerId: uuid("provider_id").notNull(),
+  bookingId: uuid("booking_id")
+    .notNull()
+    .references(() => bookingsTable.id, { onDelete: "cascade" }), // CASCADE: Delete payout schedule when booking is deleted
+  providerId: uuid("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "cascade" }), // CASCADE: Delete payout schedules when provider is deleted
   
   // Payout details
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
@@ -153,8 +163,11 @@ export const payoutSchedulesTable = pgTable("payout_schedules", {
 // ===== AVAILABILITY CACHE =====
 export const availabilityCacheTable = pgTable("availability_cache", {
   id: uuid("id").primaryKey().defaultRandom(),
-  providerId: uuid("provider_id").notNull(),
-  serviceId: uuid("service_id"),
+  providerId: uuid("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "cascade" }), // CASCADE: Delete cache when provider is deleted
+  serviceId: uuid("service_id")
+    .references(() => servicesTable.id, { onDelete: "cascade" }), // CASCADE: Delete cache when service is deleted
   
   // Time slot definition
   date: date("date").notNull(),
@@ -165,7 +178,8 @@ export const availabilityCacheTable = pgTable("availability_cache", {
   // Availability status
   isAvailable: boolean("is_available").default(true).notNull(),
   isBooked: boolean("is_booked").default(false),
-  bookingId: uuid("booking_id"),
+  bookingId: uuid("booking_id")
+    .references(() => bookingsTable.id, { onDelete: "set null" }), // SET NULL: Clear booking reference when booking is deleted
   
   // Locking for concurrent booking prevention
   lockedUntil: timestamp("locked_until"),
@@ -182,7 +196,9 @@ export const availabilityCacheTable = pgTable("availability_cache", {
 // ===== BOOKING REMINDERS =====
 export const bookingRemindersTable = pgTable("booking_reminders", {
   id: uuid("id").primaryKey().defaultRandom(),
-  bookingId: uuid("booking_id").notNull(),
+  bookingId: uuid("booking_id")
+    .notNull()
+    .references(() => bookingsTable.id, { onDelete: "cascade" }), // CASCADE: Delete reminders when booking is deleted
   
   // Reminder configuration
   reminderType: text("reminder_type", {
@@ -414,14 +430,9 @@ export interface BookingSearchFilters {
   offset?: number;
 }
 
-// Re-export existing booking and provider tables
+// Re-export existing tables from their respective schemas
 export { 
-  bookingsTable, 
-  providersTable,
   providerAvailabilityTable,
-  providerBlockedSlotsTable 
-} from './bookings-schema';
-export { 
-  providersTable as providers,
-  providerTestimonialsTable,
+  providerBlockedSlotsTable,
+  providerTestimonialsTable
 } from './providers-schema';

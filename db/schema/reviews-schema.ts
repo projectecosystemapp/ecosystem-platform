@@ -1,11 +1,21 @@
 import { pgTable, text, uuid, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { bookingsTable } from "./bookings-schema";
+import { providersTable } from "./providers-schema";
+import { profilesTable } from "./profiles-schema";
 
 // Reviews table for customer reviews after booking completion
 export const reviewsTable = pgTable("reviews", {
   id: uuid("id").primaryKey().defaultRandom(),
-  bookingId: uuid("booking_id").notNull().unique(), // Will add foreign key constraint in migration
-  providerId: uuid("provider_id").notNull(), // Will add foreign key constraint in migration
-  customerId: text("customer_id").notNull(), // Will add foreign key constraint in migration
+  bookingId: uuid("booking_id")
+    .notNull()
+    .unique()
+    .references(() => bookingsTable.id, { onDelete: "cascade" }), // CASCADE: Delete review when booking is deleted
+  providerId: uuid("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "cascade" }), // CASCADE: Delete reviews when provider is deleted
+  customerId: text("customer_id")
+    .notNull()
+    .references(() => profilesTable.userId, { onDelete: "cascade" }), // CASCADE: Delete reviews when customer is deleted
   
   // Rating and review
   rating: integer("rating").notNull(), // 1-5 stars

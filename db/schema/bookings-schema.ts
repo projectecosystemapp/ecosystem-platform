@@ -1,4 +1,6 @@
 import { pgTable, text, uuid, timestamp, numeric, integer, boolean } from "drizzle-orm/pg-core";
+import { providersTable } from "./providers-schema";
+import { profilesTable } from "./profiles-schema";
 
 // Booking status enum
 export const bookingStatus = {
@@ -12,8 +14,12 @@ export const bookingStatus = {
 // Main bookings table
 export const bookingsTable = pgTable("bookings", {
   id: uuid("id").primaryKey().defaultRandom(),
-  providerId: uuid("provider_id").notNull(), // Will add foreign key constraint in migration
-  customerId: text("customer_id").notNull(), // Will add foreign key constraint in migration
+  providerId: uuid("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "restrict" }), // RESTRICT: Prevent deleting provider with bookings
+  customerId: text("customer_id")
+    .notNull()
+    .references(() => profilesTable.userId, { onDelete: "restrict" }), // RESTRICT: Prevent deleting customer with bookings
   
   // Service details
   serviceName: text("service_name").notNull(),
@@ -40,7 +46,8 @@ export const bookingsTable = pgTable("bookings", {
   customerNotes: text("customer_notes"),
   providerNotes: text("provider_notes"),
   cancellationReason: text("cancellation_reason"),
-  cancelledBy: text("cancelled_by"), // Will add foreign key constraint in migration
+  cancelledBy: text("cancelled_by")
+    .references(() => profilesTable.userId, { onDelete: "set null" }), // SET NULL: Allow null if cancelling user is deleted
   cancelledAt: timestamp("cancelled_at"),
   
   // Booking confirmation
@@ -58,7 +65,9 @@ export const bookingsTable = pgTable("bookings", {
 // Transactions table for tracking payments and payouts
 export const transactionsTable = pgTable("transactions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  bookingId: uuid("booking_id").notNull(), // Will add foreign key constraint in migration
+  bookingId: uuid("booking_id")
+    .notNull()
+    .references(() => bookingsTable.id, { onDelete: "cascade" }), // CASCADE: Delete transactions when booking is deleted
   
   // Stripe IDs
   stripeChargeId: text("stripe_charge_id"),

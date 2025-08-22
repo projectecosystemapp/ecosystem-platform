@@ -39,7 +39,7 @@ export async function createProviderAction(data: {
   }>;
 }): Promise<ActionResult<Provider>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -69,6 +69,9 @@ export async function createProviderAction(data: {
 
     const newProvider = await createProvider(providerData);
     
+    // Audit log for provider creation
+    console.log(`[AUDIT] User ${userId} created provider profile ${newProvider.id} at ${new Date().toISOString()}`);
+    
     revalidatePath("/dashboard/provider");
     revalidatePath("/providers");
     
@@ -86,7 +89,7 @@ export async function createProviderAction(data: {
 // Get current user's provider profile
 export async function getMyProviderProfileAction(): Promise<ActionResult<Provider | null>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -145,7 +148,7 @@ export async function updateProviderAction(
   }>
 ): Promise<ActionResult<Provider>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -168,6 +171,9 @@ export async function updateProviderAction(
     }
 
     const updatedProvider = await updateProvider(provider.id, updateData);
+    
+    // Audit log for provider updates
+    console.log(`[AUDIT] User ${userId} updated provider profile ${provider.id} at ${new Date().toISOString()}`);
     
     revalidatePath("/dashboard/provider");
     revalidatePath(`/providers/${provider.slug}`);
@@ -243,7 +249,7 @@ export async function toggleProviderStatusAction(
   isActive: boolean
 ): Promise<ActionResult<Provider>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -256,6 +262,9 @@ export async function toggleProviderStatusAction(
     }
 
     const updatedProvider = await updateProvider(provider.id, { isActive });
+    
+    // Audit log for status changes
+    console.log(`[AUDIT] User ${userId} ${isActive ? "activated" : "deactivated"} provider profile ${provider.id} at ${new Date().toISOString()}`);
     
     revalidatePath("/dashboard/provider");
     revalidatePath(`/providers/${provider.slug}`);
@@ -293,7 +302,7 @@ export async function updateProviderImagesAction(
   imageUrls: string | string[]
 ): Promise<ActionResult<Provider>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -344,7 +353,7 @@ export async function updateProviderServicesAction(
   }>
 ): Promise<ActionResult<Provider>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -374,7 +383,7 @@ export async function updateProviderServicesAction(
 // Check if user has a provider profile
 export async function hasProviderProfileAction(): Promise<ActionResult<boolean>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -398,7 +407,7 @@ export async function updateProviderProfileAction(
   data: Partial<NewProvider>
 ): Promise<ActionResult<Provider>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };
@@ -421,6 +430,9 @@ export async function updateProviderProfileAction(
     }
 
     const updatedProvider = await updateProvider(providerId, data);
+    
+    // Audit log for profile updates
+    console.log(`[AUDIT] User ${userId} updated provider profile ${providerId} at ${new Date().toISOString()}`);
     
     revalidatePath("/dashboard/provider");
     revalidatePath("/dashboard/provider/profile");
@@ -450,7 +462,7 @@ export async function setProviderAvailabilityAction(
   }>
 ): Promise<ActionResult<ProviderAvailability[]>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" };

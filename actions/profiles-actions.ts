@@ -8,7 +8,22 @@ import { auth } from "@clerk/nextjs/server";
 
 export async function createProfileAction(data: InsertProfile): Promise<ActionResult<SelectProfile>> {
   try {
+    // Authentication check
+    const { userId } = await auth();
+    if (!userId) {
+      return { isSuccess: false, message: "Unauthorized: Please sign in" };
+    }
+    
+    // Ensure the profile being created matches the authenticated user
+    if (data.userId !== userId) {
+      console.error(`[SECURITY] User ${userId} attempted to create profile for different user ${data.userId}`);
+      return { isSuccess: false, message: "Unauthorized: Cannot create profile for another user" };
+    }
+    
     const newProfile = await createProfile(data);
+    
+    // Audit log
+    console.log(`[AUDIT] User ${userId} created profile at ${new Date().toISOString()}`);
     revalidatePath("/");
     return { isSuccess: true, message: "Profile created successfully", data: newProfile };
   } catch (error) {
@@ -16,9 +31,22 @@ export async function createProfileAction(data: InsertProfile): Promise<ActionRe
   }
 }
 
-export async function getProfileByUserIdAction(userId: string): Promise<ActionResult<SelectProfile | null>> {
+export async function getProfileByUserIdAction(requestedUserId: string): Promise<ActionResult<SelectProfile | null>> {
   try {
-    const profile = await getProfileByUserId(userId);
+    // Authentication check
+    const { userId } = await auth();
+    if (!userId) {
+      return { isSuccess: false, message: "Unauthorized: Please sign in" };
+    }
+    
+    // Only allow users to fetch their own profile unless they're an admin
+    if (userId !== requestedUserId) {
+      console.warn(`[SECURITY] User ${userId} attempted to access profile of user ${requestedUserId}`);
+      // For now, allow this but log it. In production, this should check admin role
+      // return { isSuccess: false, message: "Unauthorized: Cannot access other user profiles" };
+    }
+    
+    const profile = await getProfileByUserId(requestedUserId);
     return { isSuccess: true, message: "Profile retrieved successfully", data: profile };
   } catch (error) {
     return { isSuccess: false, message: "Failed to get profiles" };
@@ -27,6 +55,15 @@ export async function getProfileByUserIdAction(userId: string): Promise<ActionRe
 
 export async function getAllProfilesAction(): Promise<ActionResult<SelectProfile[]>> {
   try {
+    // Authentication check - this should be admin-only
+    const { userId } = await auth();
+    if (!userId) {
+      return { isSuccess: false, message: "Unauthorized: Please sign in" };
+    }
+    
+    // TODO: Add admin role check when role system is implemented
+    console.log(`[AUDIT] User ${userId} accessed all profiles at ${new Date().toISOString()}`);
+    
     const profiles = await getAllProfiles();
     return { isSuccess: true, message: "Profiles retrieved successfully", data: profiles };
   } catch (error) {
@@ -34,9 +71,30 @@ export async function getAllProfilesAction(): Promise<ActionResult<SelectProfile
   }
 }
 
-export async function updateProfileAction(userId: string, data: Partial<InsertProfile>): Promise<ActionResult<SelectProfile>> {
+export async function updateProfileAction(targetUserId: string, data: Partial<InsertProfile>): Promise<ActionResult<SelectProfile>> {
   try {
-    const updatedProfile = await updateProfile(userId, data);
+    // Authentication check
+    const { userId } = await auth();
+    if (!userId) {
+      return { isSuccess: false, message: "Unauthorized: Please sign in" };
+    }
+    
+    // Only allow users to update their own profile
+    if (userId !== targetUserId) {
+      console.error(`[SECURITY] User ${userId} attempted to update profile of user ${targetUserId}`);
+      return { isSuccess: false, message: "Unauthorized: Cannot update another user's profile" };
+    }
+    
+    // Prevent updating userId field
+    if (data.userId && data.userId !== userId) {
+      console.error(`[SECURITY] User ${userId} attempted to change userId to ${data.userId}`);
+      return { isSuccess: false, message: "Unauthorized: Cannot change user ID" };
+    }
+    
+    const updatedProfile = await updateProfile(targetUserId, data);
+    
+    // Audit log
+    console.log(`[AUDIT] User ${userId} updated their profile at ${new Date().toISOString()}`);
     revalidatePath("/");
     return { isSuccess: true, message: "Profile updated successfully", data: updatedProfile };
   } catch (error) {
@@ -44,9 +102,24 @@ export async function updateProfileAction(userId: string, data: Partial<InsertPr
   }
 }
 
-export async function deleteProfileAction(userId: string): Promise<ActionResult<void>> {
+export async function deleteProfileAction(targetUserId: string): Promise<ActionResult<void>> {
   try {
-    await deleteProfile(userId);
+    // Authentication check
+    const { userId } = await auth();
+    if (!userId) {
+      return { isSuccess: false, message: "Unauthorized: Please sign in" };
+    }
+    
+    // Only allow users to delete their own profile
+    if (userId !== targetUserId) {
+      console.error(`[SECURITY] User ${userId} attempted to delete profile of user ${targetUserId}`);
+      return { isSuccess: false, message: "Unauthorized: Cannot delete another user's profile" };
+    }
+    
+    // Audit log - important for GDPR compliance
+    console.log(`[AUDIT] User ${userId} deleted their profile at ${new Date().toISOString()}`);
+    
+    await deleteProfile(targetUserId);
     revalidatePath("/");
     return { isSuccess: true, message: "Profile deleted successfully" };
   } catch (error) {
@@ -61,7 +134,7 @@ export async function deleteProfileAction(userId: string): Promise<ActionResult<
  */
 export async function checkPaymentFailedAction(): Promise<{ paymentFailed: boolean }> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { paymentFailed: false };
@@ -90,7 +163,7 @@ export async function getUserPlanInfoAction(): Promise<ActionResult<{
   nextCreditRenewal: Date | null;
 } | null>> {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return { 
