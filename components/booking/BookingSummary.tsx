@@ -75,7 +75,10 @@ export function BookingSummary({
   };
 
   // Calculate fees
-  const platformFeeRate = provider.commissionRate || 0.15;
+  // Note: This should ideally check if user is authenticated
+  // For now, we'll use the base rate - parent component should pass actual rate
+  const defaultRate = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || "10") / 100;
+  const platformFeeRate = provider.commissionRate || defaultRate;
   const platformFee = service.price * platformFeeRate;
   const subtotal = service.price;
   const total = subtotal; // Customer pays full amount

@@ -46,7 +46,7 @@ export const providersTable = pgTable("providers", {
   // Stripe Connect
   stripeConnectAccountId: text("stripe_connect_account_id"),
   stripeOnboardingComplete: boolean("stripe_onboarding_complete").default(false).notNull(),
-  commissionRate: numeric("commission_rate", { precision: 3, scale: 2 }).default("0.15").notNull(), // 15% default
+  commissionRate: numeric("commission_rate", { precision: 3, scale: 2 }).default("0.10").notNull(), // 10% default (20% for guests)
   
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),

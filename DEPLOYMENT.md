@@ -36,7 +36,8 @@ These are essential for the application to run:
 
 ### Platform Configuration
 - `ACTIVE_PAYMENT_PROVIDER=stripe`
-- `NEXT_PUBLIC_PLATFORM_FEE_PERCENT=15` - Commission percentage
+- `NEXT_PUBLIC_PLATFORM_FEE_PERCENT=10` - Base commission for logged-in users
+- `NEXT_PUBLIC_GUEST_FEE_PERCENT=20` - Commission for non-authenticated users
 - `NEXT_PUBLIC_APP_URL` - Your production URL (e.g., https://yourdomain.com)
 
 ### Email Service - OPTIONAL

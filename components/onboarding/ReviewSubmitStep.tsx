@@ -264,7 +264,7 @@ export default function ReviewSubmitStep({
               <li>Provide accurate and truthful information in your profile</li>
               <li>Deliver services as described and scheduled</li>
               <li>Maintain professional conduct with all customers</li>
-              <li>Accept the platform&apos;s 15% commission on all bookings</li>
+              <li>Accept the platform&apos;s 10% commission on all bookings (20% for guest customers)</li>
               <li>Respond to customer inquiries within 24 hours</li>
               <li>Maintain a minimum 4.0 star rating (subject to review)</li>
               <li>Comply with all local laws and regulations for your services</li>

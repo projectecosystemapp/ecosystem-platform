@@ -157,6 +157,7 @@ echo "⚙️  Platform Configuration"
 echo "--------------------------"
 check_required "ACTIVE_PAYMENT_PROVIDER"
 check_required "NEXT_PUBLIC_PLATFORM_FEE_PERCENT"
+check_required "NEXT_PUBLIC_GUEST_FEE_PERCENT"
 check_required "NEXT_PUBLIC_APP_URL"
 validate_url "NEXT_PUBLIC_APP_URL"
 

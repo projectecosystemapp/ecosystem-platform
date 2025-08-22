@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createMarketplacePaymentIntent } from "@/lib/stripe";
+import { createPaymentIntentWithIdempotency } from "@/lib/stripe-enhanced";
 import { db } from "@/db/db";
 import { bookingsTable } from "@/db/schema/bookings-schema";
 import { providersTable } from "@/db/schema/providers-schema";
@@ -69,13 +69,14 @@ export const POST = withRateLimitRedis(
     const totalAmountCents = Math.round(parseFloat(booking.totalAmount) * 100);
     const platformFeeCents = Math.round(parseFloat(booking.platformFee) * 100);
 
-    // Create payment intent
-    const paymentIntent = await createMarketplacePaymentIntent({
+    // Create payment intent with idempotency key
+    const paymentIntent = await createPaymentIntentWithIdempotency({
       amount: totalAmountCents,
       currency: "usd", // TODO: Make this configurable
       customerId: customer?.stripeCustomerId || undefined,
       stripeConnectAccountId: provider.stripeConnectAccountId,
       platformFeeAmount: platformFeeCents,
+      bookingId: booking.id, // Required for idempotency
       metadata: {
         bookingId: booking.id,
         providerId: provider.id,

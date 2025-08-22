@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProviderBySlugAction } from "@/actions/providers-actions";
 import { ProviderProfileClient } from "@/components/provider/provider-profile-client";
+import { ProviderErrorBoundary } from "@/components/error-boundaries/provider-error-boundary";
 
 interface ProviderProfilePageProps {
   params: {
@@ -88,12 +89,15 @@ export default async function ProviderProfilePage({
   };
 
   return (
-    <>
+    <ProviderErrorBoundary 
+      providerId={provider.id}
+      providerName={provider.displayName}
+    >
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
       <ProviderProfileClient provider={provider} />
-    </>
+    </ProviderErrorBoundary>
   );
 }

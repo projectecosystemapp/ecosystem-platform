@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { getAvailableSlotsAction } from "@/actions/bookings-actions";
+import { useProviderAvailability } from "@/hooks/api/useProviders";
+import { format as formatDate } from "date-fns";
 
 interface TimeSlotPickerProps {
   providerId: string;

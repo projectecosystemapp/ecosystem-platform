@@ -370,7 +370,7 @@ graph TD
 #### 7. **Memory** - Context Retention
 ```bash
 # Use for maintaining project context
-"Store in memory: The platform fee is 7%, escrow release happens after service completion"
+"Store in memory: The platform fee is 10% (logged-in users) / 20% (guests), escrow release happens after service completion"
 ```
 
 #### 8. **Filesystem** - File Operations
@@ -514,7 +514,7 @@ export const useBookingStore = create<BookingStore>()(
 // ✅ Test business logic thoroughly
 describe('BookingService', () => {
   describe('calculatePlatformFee', () => {
-    it('should calculate 7% platform fee correctly', () => {
+    it('should calculate 10% platform fee correctly', () => {
       const amount = 100;
       const fee = calculatePlatformFee(amount);
       expect(fee).toBe(7);
@@ -695,7 +695,7 @@ docs/api-documentation           # Documentation
 
 # Commit message format
 feat: add provider availability management
-fix: correct platform fee calculation
+fix: correct platform fee calculation (10% base, 20% guests)
 refactor: extract booking logic to service
 perf: optimize provider search query
 docs: update API documentation
@@ -915,7 +915,8 @@ STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 
 # Platform Configuration
-NEXT_PUBLIC_PLATFORM_FEE_PERCENT=7
+NEXT_PUBLIC_PLATFORM_FEE_PERCENT=10  # Base fee for logged-in users
+NEXT_PUBLIC_GUEST_FEE_PERCENT=20      # Fee for non-authenticated users
 NEXT_PUBLIC_APP_URL=
 
 # MCP Servers
@@ -957,7 +958,7 @@ NOTION_API_KEY=              # For Notion integration
 - [ ] Provider retention > 85%
 - [ ] Customer satisfaction (NPS) > 50
 - [ ] Payment success rate > 98%
-- [ ] Platform fee collection > 95%
+- [ ] Platform fee collection > 95% (10% logged-in, 20% guests)
 
 ---
 

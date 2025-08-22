@@ -6,7 +6,8 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
 process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'pk_test_123'
 process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_456'
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000'
-process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT = '15'
+process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT = '10'
+process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT = '20'
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({

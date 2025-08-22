@@ -10,7 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { getAvailableSlotsAction } from "@/actions/bookings-actions";
+import { useProviderAvailability } from "@/hooks/api/useProviders";
+import { format as formatDate } from "date-fns";
 
 interface BookingCalendarProps {
   providerId: string;
@@ -38,10 +39,8 @@ export function BookingCalendar({
   timezone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 }: BookingCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [isLoading, setIsLoading] = useState(true);
-  const [availabilityMap, setAvailabilityMap] = useState<Map<string, DayAvailability>>(new Map());
-  const [error, setError] = useState<string | null>(null);
 
+  
   // Calculate date boundaries
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -57,53 +56,36 @@ export function BookingCalendar({
   // Get the first day of the week for the month (for grid alignment)
   const firstDayOfWeek = getDay(calendarDays[0]);
 
-  // Fetch availability data
-  useEffect(() => {
-    const fetchAvailability = async () => {
-      if (!providerId) return;
+  // Use availability API hook
+  const {
+    availability,
+    isLoading,
+    error,
+    refreshAvailability,
+  } = useProviderAvailability(providerId, {
+    startDate: startOfMonth(currentMonth).toISOString(),
+    endDate: endOfMonth(currentMonth).toISOString(),
+    slotDuration: selectedService?.duration || 60,
+    timezone,
+  });
 
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const startDate = startOfMonth(currentMonth);
-        const endDate = endOfMonth(currentMonth);
-        const slotDuration = selectedService?.duration || 60;
-
-        const result = await getAvailableSlotsAction(
-          providerId,
-          startDate,
-          endDate,
-          slotDuration,
-          timezone
-        );
-
-        if (result.isSuccess && result.data) {
-          const newMap = new Map<string, DayAvailability>();
-          
-          result.data.forEach((dayData: any) => {
-            const availableSlots = dayData.slots.filter((slot: any) => slot.available);
-            newMap.set(dayData.date, {
-              date: dayData.date,
-              hasAvailableSlots: availableSlots.length > 0,
-              slotCount: availableSlots.length,
-            });
-          });
-
-          setAvailabilityMap(newMap);
-        } else {
-          setError(result.message || "Failed to load availability");
-        }
-      } catch (err) {
-        setError("Unable to load calendar availability");
-        console.error("Error fetching availability:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAvailability();
-  }, [providerId, currentMonth, selectedService?.duration, timezone]);
+  // Create availability map from API data
+  const availabilityMap = useMemo(() => {
+    const map = new Map<string, DayAvailability>();
+    
+    if (availability?.availability) {
+      availability.availability.forEach((dayData) => {
+        const availableSlots = dayData.slots.filter(slot => slot.available);
+        map.set(dayData.date, {
+          date: dayData.date,
+          hasAvailableSlots: availableSlots.length > 0,
+          slotCount: availableSlots.length,
+        });
+      });
+    }
+    
+    return map;
+  }, [availability]);
 
   const handlePreviousMonth = () => {
     const newMonth = new Date(currentMonth);
@@ -130,21 +112,21 @@ export function BookingCalendar({
     if (date < today || date > maxDate) return false;
 
     // Check availability
-    const dateStr = format(date, "yyyy-MM-dd");
-    const availability = availabilityMap.get(dateStr);
+    const dateStr = formatDate(date, "yyyy-MM-dd");
+    const dayAvailability = availabilityMap.get(dateStr);
     
-    return availability?.hasAvailableSlots || false;
+    return dayAvailability?.hasAvailableSlots || false;
   };
 
   const getDayStatus = (date: Date) => {
-    const dateStr = format(date, "yyyy-MM-dd");
-    const availability = availabilityMap.get(dateStr);
+    const dateStr = formatDate(date, "yyyy-MM-dd");
+    const dayAvailability = availabilityMap.get(dateStr);
     
     if (date < today) return "past";
     if (date > maxDate) return "unavailable";
-    if (!availability) return "loading";
-    if (!availability.hasAvailableSlots) return "unavailable";
-    if (availability.slotCount && availability.slotCount <= 2) return "limited";
+    if (!dayAvailability && isLoading) return "loading";
+    if (!dayAvailability || !dayAvailability.hasAvailableSlots) return "unavailable";
+    if (dayAvailability.slotCount && dayAvailability.slotCount <= 2) return "limited";
     return "available";
   };
 
@@ -220,7 +202,7 @@ export function BookingCalendar({
                 const status = getDayStatus(date);
                 const isSelected = selectedDate && isSameDay(date, selectedDate);
                 const isClickable = isDaySelectable(date);
-                const availability = availabilityMap.get(format(date, "yyyy-MM-dd"));
+                const dayAvailability = availabilityMap.get(formatDate(date, "yyyy-MM-dd"));
 
                 return (
                   <motion.div
@@ -259,23 +241,23 @@ export function BookingCalendar({
                           "text-sm",
                           isSelected && "text-white"
                         )}>
-                          {format(date, "d")}
+                          {formatDate(date, "d")}
                         </span>
                         
                         {/* Availability indicator */}
-                        {!isLoading && availability && availability.hasAvailableSlots && (
+                        {!isLoading && dayAvailability && dayAvailability.hasAvailableSlots && (
                           <div className={cn(
                             "absolute bottom-1 left-1/2 transform -translate-x-1/2",
                             "flex gap-0.5"
                           )}>
-                            {availability.slotCount && availability.slotCount <= 2 ? (
+                            {dayAvailability.slotCount && dayAvailability.slotCount <= 2 ? (
                               <div className={cn(
                                 "h-1 w-1 rounded-full",
                                 isSelected ? "bg-white/70" : "bg-orange-400"
                               )} />
                             ) : (
                               <>
-                                {[...Array(Math.min(3, availability.slotCount || 0))].map((_, i) => (
+                                {[...Array(Math.min(3, dayAvailability.slotCount || 0))].map((_, i) => (
                                   <div
                                     key={i}
                                     className={cn(
@@ -326,7 +308,7 @@ export function BookingCalendar({
           >
             <p className="text-sm text-blue-900">
               <span className="font-medium">Selected:</span>{" "}
-              {format(selectedDate, "EEEE, MMMM d, yyyy")}
+              {formatDate(selectedDate, "EEEE, MMMM d, yyyy")}
             </p>
           </motion.div>
         )}

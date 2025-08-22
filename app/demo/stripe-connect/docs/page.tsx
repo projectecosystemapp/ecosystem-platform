@@ -531,7 +531,8 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 
 # Platform Configuration
-NEXT_PUBLIC_PLATFORM_FEE_PERCENT=15
+NEXT_PUBLIC_PLATFORM_FEE_PERCENT=10  # Base fee
+NEXT_PUBLIC_GUEST_FEE_PERCENT=20     # Guest fee
 NEXT_PUBLIC_APP_URL=https://yourdomain.com
 
 # Database (for provider validation)

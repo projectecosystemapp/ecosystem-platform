@@ -3,13 +3,24 @@ import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
+import { db } from "@/db/db";
+import { bookingsTable, transactionsTable } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 const relevantEvents = new Set([
   "checkout.session.completed", 
   "customer.subscription.updated", 
   "customer.subscription.deleted",
   "invoice.payment_succeeded",
-  "invoice.payment_failed"
+  "invoice.payment_failed",
+  // Booking-related events
+  "payment_intent.succeeded",
+  "payment_intent.payment_failed",
+  "payment_intent.canceled",
+  "charge.dispute.created",
+  "transfer.created",
+  "transfer.paid",
+  "transfer.failed"
 ]);
 
 // Default usage credits for Pro plan
@@ -50,6 +61,35 @@ export async function POST(req: Request) {
           
         case "invoice.payment_failed":
           await handlePaymentFailed(event);
+          break;
+
+        // Booking payment events
+        case "payment_intent.succeeded":
+          await handleBookingPaymentSuccess(event);
+          break;
+
+        case "payment_intent.payment_failed":
+          await handleBookingPaymentFailure(event);
+          break;
+
+        case "payment_intent.canceled":
+          await handleBookingPaymentCancellation(event);
+          break;
+
+        case "charge.dispute.created":
+          await handleBookingChargeDispute(event);
+          break;
+
+        case "transfer.created":
+          await handleBookingTransferCreated(event);
+          break;
+
+        case "transfer.paid":
+          await handleBookingTransferPaid(event);
+          break;
+
+        case "transfer.failed":
+          await handleBookingTransferFailed(event);
           break;
 
         default:
@@ -153,5 +193,271 @@ async function handlePaymentFailed(event: Stripe.Event) {
     }
   } catch (error) {
     console.error(`Error processing payment failure: ${error}`);
+  }
+}
+
+// Booking-related webhook handlers
+
+/**
+ * Handle successful booking payment confirmation
+ */
+async function handleBookingPaymentSuccess(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent;
+  const bookingId = paymentIntent.metadata?.bookingId;
+
+  if (!bookingId || paymentIntent.metadata?.type !== "booking_payment") {
+    // This payment intent is not for a booking, skip
+    return;
+  }
+
+  try {
+    // Update booking status to confirmed
+    const [updatedBooking] = await db
+      .update(bookingsTable)
+      .set({
+        status: "confirmed",
+        updatedAt: new Date()
+      })
+      .where(eq(bookingsTable.id, bookingId))
+      .returning();
+
+    if (!updatedBooking) {
+      console.error(`Booking not found: ${bookingId}`);
+      return;
+    }
+
+    // Update transaction status
+    await db
+      .update(transactionsTable)
+      .set({
+        status: "completed",
+        stripeChargeId: paymentIntent.latest_charge as string,
+        processedAt: new Date()
+      })
+      .where(eq(transactionsTable.bookingId, bookingId));
+
+    console.log(`Booking payment confirmed: ${bookingId}`);
+
+    // TODO: Send confirmation email to customer and provider
+    // TODO: Create calendar events
+    // TODO: Send push notifications
+
+  } catch (error) {
+    console.error(`Error handling booking payment success for ${bookingId}:`, error);
+  }
+}
+
+/**
+ * Handle booking payment failure
+ */
+async function handleBookingPaymentFailure(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent;
+  const bookingId = paymentIntent.metadata?.bookingId;
+
+  if (!bookingId || paymentIntent.metadata?.type !== "booking_payment") {
+    return;
+  }
+
+  try {
+    // Update booking status to cancelled due to payment failure
+    await db
+      .update(bookingsTable)
+      .set({
+        status: "cancelled",
+        cancellationReason: "payment_failed",
+        cancelledAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(bookingsTable.id, bookingId));
+
+    // Update transaction status
+    await db
+      .update(transactionsTable)
+      .set({
+        status: "failed",
+        processedAt: new Date()
+      })
+      .where(eq(transactionsTable.bookingId, bookingId));
+
+    console.log(`Booking payment failed: ${bookingId}`);
+
+    // TODO: Send payment failure notification to customer
+    // TODO: Release time slot for rebooking
+
+  } catch (error) {
+    console.error(`Error handling booking payment failure for ${bookingId}:`, error);
+  }
+}
+
+/**
+ * Handle booking payment cancellation
+ */
+async function handleBookingPaymentCancellation(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent;
+  const bookingId = paymentIntent.metadata?.bookingId;
+
+  if (!bookingId || paymentIntent.metadata?.type !== "booking_payment") {
+    return;
+  }
+
+  try {
+    // Update booking status to cancelled
+    await db
+      .update(bookingsTable)
+      .set({
+        status: "cancelled",
+        cancellationReason: "payment_cancelled",
+        cancelledAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(bookingsTable.id, bookingId));
+
+    // Update transaction status
+    await db
+      .update(transactionsTable)
+      .set({
+        status: "failed",
+        processedAt: new Date()
+      })
+      .where(eq(transactionsTable.bookingId, bookingId));
+
+    console.log(`Booking payment cancelled: ${bookingId}`);
+
+  } catch (error) {
+    console.error(`Error handling booking payment cancellation for ${bookingId}:`, error);
+  }
+}
+
+/**
+ * Handle charge dispute (chargeback)
+ */
+async function handleBookingChargeDispute(event: Stripe.Event) {
+  const dispute = event.data.object as Stripe.Dispute;
+  const chargeId = dispute.charge as string;
+
+  try {
+    // Find the booking associated with this charge
+    const transaction = await db
+      .select({
+        bookingId: transactionsTable.bookingId
+      })
+      .from(transactionsTable)
+      .where(eq(transactionsTable.stripeChargeId, chargeId))
+      .limit(1);
+
+    if (transaction.length === 0) {
+      console.error(`No transaction found for charge ${chargeId}`);
+      return;
+    }
+
+    const bookingId = transaction[0].bookingId;
+
+    // Update booking with dispute information
+    await db
+      .update(bookingsTable)
+      .set({
+        status: "cancelled",
+        cancellationReason: "disputed",
+        cancelledAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(bookingsTable.id, bookingId));
+
+    console.log(`Dispute created for booking ${bookingId}`);
+
+    // TODO: Notify provider about dispute
+    // TODO: Freeze provider payouts if needed
+    // TODO: Escalate to support team
+
+  } catch (error) {
+    console.error(`Error handling charge dispute for charge ${chargeId}:`, error);
+  }
+}
+
+/**
+ * Handle transfer creation (payout to provider)
+ */
+async function handleBookingTransferCreated(event: Stripe.Event) {
+  const transfer = event.data.object as Stripe.Transfer;
+  const bookingId = transfer.metadata?.bookingId;
+
+  if (!bookingId) {
+    return;
+  }
+
+  try {
+    // Update transaction with transfer ID
+    await db
+      .update(transactionsTable)
+      .set({
+        stripeTransferId: transfer.id
+      })
+      .where(eq(transactionsTable.bookingId, bookingId));
+
+    console.log(`Transfer created for booking ${bookingId}: ${transfer.id}`);
+
+  } catch (error) {
+    console.error(`Error handling transfer creation for booking ${bookingId}:`, error);
+  }
+}
+
+/**
+ * Handle successful transfer (payout completed)
+ */
+async function handleBookingTransferPaid(event: Stripe.Event) {
+  const transfer = event.data.object as Stripe.Transfer;
+  const bookingId = transfer.metadata?.bookingId;
+
+  if (!bookingId) {
+    return;
+  }
+
+  try {
+    // Update transaction status
+    await db
+      .update(transactionsTable)
+      .set({
+        status: "completed",
+        processedAt: new Date()
+      })
+      .where(eq(transactionsTable.stripeTransferId, transfer.id));
+
+    console.log(`Transfer paid for booking ${bookingId}: ${transfer.id}`);
+
+    // TODO: Notify provider about successful payout
+
+  } catch (error) {
+    console.error(`Error handling transfer payment for booking ${bookingId}:`, error);
+  }
+}
+
+/**
+ * Handle failed transfer (payout failed)
+ */
+async function handleBookingTransferFailed(event: Stripe.Event) {
+  const transfer = event.data.object as Stripe.Transfer;
+  const bookingId = transfer.metadata?.bookingId;
+
+  if (!bookingId) {
+    return;
+  }
+
+  try {
+    // Update transaction status
+    await db
+      .update(transactionsTable)
+      .set({
+        status: "failed",
+        processedAt: new Date()
+      })
+      .where(eq(transactionsTable.stripeTransferId, transfer.id));
+
+    console.log(`Transfer failed for booking ${bookingId}: ${transfer.id}`);
+
+    // TODO: Notify provider about failed payout
+    // TODO: Retry transfer or escalate to support
+
+  } catch (error) {
+    console.error(`Error handling transfer failure for booking ${bookingId}:`, error);
   }
 }

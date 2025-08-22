@@ -85,7 +85,12 @@ export const POST = withRateLimit(
 
     // Calculate application fee based on actual prices
     // This is where the marketplace makes money from each transaction
-    const defaultFeePercent = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || "15");
+    // Base fee: 10% for logged-in users, 20% for guests
+    const baseFeePercent = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || "10");
+    const guestFeePercent = parseFloat(process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT || "20");
+    
+    // Apply higher fee for non-authenticated users
+    const defaultFeePercent = userId ? baseFeePercent : guestFeePercent;
     const feePercent = applicationFeePercent || defaultFeePercent;
 
     // Fetch actual prices from Stripe to calculate accurate fees
@@ -222,7 +227,7 @@ export const POST = withRateLimit(
  *       "quantity": 1
  *     }
  *   ],
- *   "applicationFeePercent": 15,
+ *   "applicationFeePercent": 10,
  *   "successUrl": "https://myapp.com/booking/success",
  *   "cancelUrl": "https://myapp.com/booking/canceled",
  *   "metadata": {
@@ -242,7 +247,7 @@ export const POST = withRateLimit(
  *   "payment": {
  *     "account_id": "acct_1234567890",
  *     "application_fee_amount": 750,
- *     "fee_percent": 15,
+ *     "fee_percent": 10,
  *     "estimated_total": 5000
  *   },
  *   "provider": {
@@ -256,7 +261,8 @@ export const POST = withRateLimit(
  * 
  * 1. Application Fee Structure:
  *    - Customer pays $50.00 to provider
- *    - Platform takes $7.50 (15%) as application fee
+ *    - Platform takes $5.00 (10%) as application fee for logged-in users
+ *    - Platform takes $10.00 (20%) as application fee for guests
  *    - Provider receives $42.50 net
  * 
  * 2. Direct Charges vs. Destination Charges:
