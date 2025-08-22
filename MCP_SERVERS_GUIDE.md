@@ -52,7 +52,7 @@ Add these to your `.env.local`:
 
 ```env
 # PostgreSQL Read-Only Connection
-PG_READONLY_URL=postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-1-ca-central-1.pooler.supabase.com:5432/postgres
+PG_READONLY_URL=postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-NEW-PASSWORD]@aws-1-ca-central-1.pooler.supabase.com:5432/postgres
 
 # GitHub Personal Access Token
 # Create at: https://github.com/settings/tokens

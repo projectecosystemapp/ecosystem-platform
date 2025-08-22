@@ -8,7 +8,7 @@ Your production database is in **Canada (ca-central-1)** region.
 
 Use this exact connection string for Vercel:
 ```
-postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-1-ca-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-NEW-PASSWORD]@aws-1-ca-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
 ```
 
 ## Environment Variables for Vercel
@@ -17,7 +17,7 @@ Add these in Vercel Dashboard → Settings → Environment Variables:
 
 ```env
 # === SUPABASE (YOUR PRODUCTION VALUES) ===
-DATABASE_URL=postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-1-ca-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+DATABASE_URL=postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-NEW-PASSWORD]@aws-1-ca-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
 NEXT_PUBLIC_SUPABASE_URL=https://mhyqvbeiqwkgfyqdfnlu.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_LwlRcXhiwjVcOTbI0AxAIw_nsGSTMYo
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_ikdSwj_-wY3I8IglYSz-FA_YVM7ALrp
@@ -52,7 +52,7 @@ DATABASE_URL="CONNECTION_STRING" npx drizzle-kit push
 
 Example:
 ```bash
-DATABASE_URL="postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-0-us-east-1.pooler.supabase.com:6543/postgres" npx drizzle-kit push
+DATABASE_URL="postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-NEW-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres" npx drizzle-kit push
 ```
 
 2. **Verify tables were created**:
@@ -71,12 +71,12 @@ DATABASE_URL="postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASS
 ### Alternative connection formats to try:
 ```bash
 # Direct connection
-postgresql://postgres:ECOSYSTEMPROJECTAPPPASSWORD2025@db.mhyqvbeiqwkgfyqdfnlu.supabase.co:5432/postgres
+postgresql://postgres:[YOUR-NEW-PASSWORD]@db.mhyqvbeiqwkgfyqdfnlu.supabase.co:5432/postgres
 
 # Pooler with different regions
-postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-0-us-east-1.pooler.supabase.com:6543/postgres
-postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-0-us-west-1.pooler.supabase.com:6543/postgres
-postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:ECOSYSTEMPROJECTAPPPASSWORD2025@aws-0-eu-west-1.pooler.supabase.com:6543/postgres
+postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-NEW-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-NEW-PASSWORD]@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+postgresql://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-NEW-PASSWORD]@aws-0-eu-west-1.pooler.supabase.com:6543/postgres
 ```
 
 ## After Deployment

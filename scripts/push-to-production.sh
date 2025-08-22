@@ -7,7 +7,7 @@ echo "Press Ctrl+C to cancel, or Enter to continue..."
 read
 
 # Set production DATABASE_URL
-export DATABASE_URL="postgresql://postgres:ECOSYSTEMPROJECTAPPPASSWORD2025@db.mhyqvbeiqwkgfyqdfnlu.supabase.co:5432/postgres"
+export DATABASE_URL="postgresql://postgres:[YOUR-NEW-PASSWORD]@db.mhyqvbeiqwkgfyqdfnlu.supabase.co:5432/postgres"
 
 echo "📦 Generating migrations if needed..."
 npm run db:generate

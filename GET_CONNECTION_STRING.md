@@ -37,7 +37,7 @@ postgres://postgres:[YOUR-PASSWORD]@db.mhyqvbeiqwkgfyqdfnlu.supabase.co:5432/pos
 postgres://postgres.mhyqvbeiqwkgfyqdfnlu:[YOUR-PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres
 ```
 
-**IMPORTANT**: Replace `[YOUR-PASSWORD]` with `ECOSYSTEMPROJECTAPPPASSWORD2025`
+**IMPORTANT**: Replace `[YOUR-PASSWORD]` with `[YOUR-NEW-PASSWORD]`
 
 ## Step 5: Run the Push Command
 
