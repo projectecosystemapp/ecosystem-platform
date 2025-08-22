@@ -8,13 +8,14 @@ import {
   validateImageFile,
   FILE_SIZE_LIMITS,
   ALLOWED_IMAGE_TYPES,
+  ImageType,
 } from '@/lib/supabase/storage-helpers'
 
 interface ImageUploadProps {
   onUpload: (file: File) => Promise<{ publicUrl: string }>
   onRemove?: () => Promise<void>
   currentImageUrl?: string | null
-  maxSize?: number
+  imageType?: ImageType
   label?: string
   description?: string
   aspectRatio?: 'square' | 'video' | 'banner'
@@ -26,7 +27,7 @@ export function ImageUpload({
   onUpload,
   onRemove,
   currentImageUrl,
-  maxSize = FILE_SIZE_LIMITS.PROFILE_IMAGE,
+  imageType = ImageType.PROFILE,
   label = 'Upload Image',
   description,
   aspectRatio = 'square',
@@ -43,7 +44,7 @@ export function ImageUpload({
       setError(null)
 
       // Validate file
-      const validation = validateImageFile(file, maxSize)
+      const validation = validateImageFile(file, imageType)
       if (!validation.valid) {
         setError(validation.error || 'Invalid file')
         return
@@ -68,7 +69,7 @@ export function ImageUpload({
         setIsUploading(false)
       }
     },
-    [onUpload, currentImageUrl, maxSize]
+    [onUpload, currentImageUrl, imageType]
   )
 
   const handleDrop = useCallback(
@@ -138,6 +139,13 @@ export function ImageUpload({
     banner: 'aspect-[3/1]',
   }
 
+  // Determine max size based on image type
+  const maxSize = imageType === ImageType.GALLERY 
+    ? FILE_SIZE_LIMITS.GALLERY_IMAGE 
+    : imageType === ImageType.COVER
+    ? FILE_SIZE_LIMITS.COVER_IMAGE
+    : FILE_SIZE_LIMITS.PROFILE_IMAGE
+  
   const maxSizeMB = Math.round(maxSize / (1024 * 1024))
   const acceptedTypes = ALLOWED_IMAGE_TYPES.map(type => 
     type.replace('image/', '.')
@@ -260,7 +268,7 @@ interface GalleryUploadProps {
   maxImages?: number
   onUpload: (file: File, index: number) => Promise<{ publicUrl: string }>
   onRemove: (index: number) => Promise<void>
-  maxSize?: number
+  imageType?: ImageType
   disabled?: boolean
 }
 
@@ -269,7 +277,7 @@ export function GalleryUpload({
   maxImages = 12,
   onUpload,
   onRemove,
-  maxSize = FILE_SIZE_LIMITS.GALLERY_IMAGE,
+  imageType = ImageType.GALLERY,
   disabled = false,
 }: GalleryUploadProps) {
   const [isUploading, setIsUploading] = useState<number | null>(null)
@@ -280,7 +288,7 @@ export function GalleryUpload({
       setErrors(prev => ({ ...prev, [index]: '' }))
 
       // Validate file
-      const validation = validateImageFile(file, maxSize)
+      const validation = validateImageFile(file, imageType)
       if (!validation.valid) {
         setErrors(prev => ({ ...prev, [index]: validation.error || 'Invalid file' }))
         return
@@ -303,7 +311,7 @@ export function GalleryUpload({
         setIsUploading(null)
       }
     },
-    [onUpload, maxSize]
+    [onUpload, imageType]
   )
 
   const handleRemove = useCallback(

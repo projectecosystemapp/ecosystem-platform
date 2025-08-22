@@ -272,7 +272,7 @@ export default function ReviewStep() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => goToStep(OnboardingStep.STRIPE_SETUP)}
+            onClick={() => goToStep(OnboardingStep.PAYMENT)}
           >
             <Edit className="w-4 h-4 mr-2" />
             Edit
@@ -308,7 +308,7 @@ export default function ReviewStep() {
 
           {/* Status */}
           <div className="flex justify-end mt-4">
-            {isComplete(OnboardingStep.STRIPE_SETUP) ? (
+            {isComplete(OnboardingStep.PAYMENT) ? (
               <Badge className="bg-green-100 text-green-800">
                 <CheckCircle className="w-3 h-3 mr-1" />
                 Complete
@@ -328,7 +328,7 @@ export default function ReviewStep() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => goToStep(OnboardingStep.IMAGES)}
+              onClick={() => goToStep(OnboardingStep.ADDITIONAL)}
             >
               <Edit className="w-4 h-4 mr-2" />
               Edit
@@ -358,7 +358,7 @@ export default function ReviewStep() {
 
       {/* Submission Readiness */}
       <Alert className={
-        [OnboardingStep.BASIC_INFO, OnboardingStep.SERVICES, OnboardingStep.AVAILABILITY, OnboardingStep.STRIPE_SETUP]
+        [OnboardingStep.BASIC_INFO, OnboardingStep.SERVICES, OnboardingStep.AVAILABILITY, OnboardingStep.PAYMENT]
           .every(step => completedSteps.has(step))
           ? "bg-green-50 border-green-200"
           : "bg-yellow-50 border-yellow-200"

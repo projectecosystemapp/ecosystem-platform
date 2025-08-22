@@ -39,19 +39,21 @@ interface OnboardingProgressProps {
 
 const STEP_LABELS = {
   [OnboardingStep.BASIC_INFO]: "Basic Info",
+  [OnboardingStep.LOCATION]: "Location",
   [OnboardingStep.SERVICES]: "Services",
   [OnboardingStep.AVAILABILITY]: "Availability",
-  [OnboardingStep.IMAGES]: "Images",
-  [OnboardingStep.STRIPE_SETUP]: "Payment",
+  [OnboardingStep.PAYMENT]: "Payment",
+  [OnboardingStep.ADDITIONAL]: "Images",
   [OnboardingStep.REVIEW]: "Review",
 };
 
 const STEP_DESCRIPTIONS = {
   [OnboardingStep.BASIC_INFO]: "Personal and business information",
+  [OnboardingStep.LOCATION]: "Service location details",
   [OnboardingStep.SERVICES]: "Services you offer and pricing",
   [OnboardingStep.AVAILABILITY]: "Your weekly schedule",
-  [OnboardingStep.IMAGES]: "Profile and gallery photos",
-  [OnboardingStep.STRIPE_SETUP]: "Payment account setup",
+  [OnboardingStep.PAYMENT]: "Payment account setup",
+  [OnboardingStep.ADDITIONAL]: "Profile and gallery photos",
   [OnboardingStep.REVIEW]: "Review and submit your profile",
 };
 
@@ -59,11 +61,17 @@ export default function OnboardingProgress({
   currentStep,
   onStepClick,
 }: OnboardingProgressProps) {
-  const { completedSteps, canNavigateToStep } = useProviderOnboardingStore();
+  const { completedSteps } = useProviderOnboardingStore();
   const progressPercentage = useOnboardingProgress();
 
+  // Check if user can navigate to a step
+  const canNavigateToStep = (step: OnboardingStep) => {
+    // Can navigate to completed steps or current step
+    return completedSteps.includes(step) || step === currentStep || step < currentStep;
+  };
+
   const getStepStatus = (step: OnboardingStep) => {
-    if (completedSteps.has(step)) return "completed";
+    if (completedSteps.includes(step)) return "completed";
     if (step === currentStep) return "current";
     if (canNavigateToStep(step)) return "available";
     return "locked";

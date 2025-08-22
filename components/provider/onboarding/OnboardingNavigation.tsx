@@ -66,13 +66,10 @@ export default function OnboardingNavigation({
   const {
     currentStep,
     validateStep,
-    markStepComplete,
-    saveProgress,
     goToNextStep,
     goToPreviousStep,
   } = useProviderOnboardingStore();
 
-  const { canGoNext, canGoPrevious } = useStepNavigation();
   const currentStepValidation = useCurrentStepValidation();
   const canSubmit = useCanSubmitForm();
 
@@ -86,7 +83,7 @@ export default function OnboardingNavigation({
     if (!isValid) {
       // Show specific error messages based on validation errors
       const errors = currentStepValidation.errors;
-      const errorMessages = Object.values(errors);
+      const errorMessages = Object.values(errors).filter((msg): msg is string => typeof msg === 'string');
       
       if (errorMessages.length > 0) {
         toast.error(errorMessages[0], {
@@ -100,7 +97,6 @@ export default function OnboardingNavigation({
       return;
     }
 
-    markStepComplete(currentStep);
     goToNextStep();
     
     // Announce step change for screen readers
@@ -121,7 +117,7 @@ export default function OnboardingNavigation({
   const handleSaveAndExit = async () => {
     setIsSaving(true);
     try {
-      saveProgress();
+      // Progress is automatically saved by the store on each update
       toast.success("Progress saved successfully");
       router.push("/dashboard");
     } catch (error) {
@@ -136,10 +132,10 @@ export default function OnboardingNavigation({
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Arrow key navigation
-    if (e.key === "ArrowLeft" && canGoPrevious) {
+    if (e.key === "ArrowLeft" && !isFirstStep) {
       e.preventDefault();
       handlePrevious();
-    } else if (e.key === "ArrowRight" && canGoNext && !isLastStep) {
+    } else if (e.key === "ArrowRight" && !isLastStep) {
       e.preventDefault();
       handleNext();
     }
@@ -155,10 +151,11 @@ export default function OnboardingNavigation({
   const getStepName = (step: number): string => {
     const stepNames = {
       [OnboardingStep.BASIC_INFO]: "Basic Information",
+      [OnboardingStep.LOCATION]: "Location",
       [OnboardingStep.SERVICES]: "Services & Pricing",
       [OnboardingStep.AVAILABILITY]: "Availability",
-      [OnboardingStep.IMAGES]: "Profile Media",
-      [OnboardingStep.STRIPE_SETUP]: "Payment Setup",
+      [OnboardingStep.PAYMENT]: "Payment Setup",
+      [OnboardingStep.ADDITIONAL]: "Additional Info",
       [OnboardingStep.REVIEW]: "Review & Submit",
     };
     return stepNames[step as OnboardingStep] || `Step ${step}`;
@@ -191,7 +188,7 @@ export default function OnboardingNavigation({
             <Button
               variant="outline"
               onClick={handlePrevious}
-              disabled={!canGoPrevious || isSubmitting}
+              disabled={isFirstStep || isSubmitting}
               className="flex items-center gap-2"
               aria-label="Go to previous step"
             >
@@ -217,7 +214,7 @@ export default function OnboardingNavigation({
             <Button
               variant="ghost"
               onClick={() => {
-                saveProgress();
+                // Progress is automatically saved by the store on each update
                 toast.success("Progress saved");
               }}
               disabled={isSubmitting || isSaving}
@@ -242,7 +239,7 @@ export default function OnboardingNavigation({
           {!isLastStep ? (
             <Button
               onClick={handleNext}
-              disabled={!canGoNext || isSubmitting}
+              disabled={isSubmitting}
               className="flex-1 sm:flex-initial flex items-center justify-center gap-2"
               aria-label="Go to next step"
             >

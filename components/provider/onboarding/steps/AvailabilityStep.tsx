@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useProviderOnboardingStore } from "@/lib/stores/provider-onboarding-store";
+import { useProviderOnboardingStore, type WeeklyAvailability } from "@/lib/stores/provider-onboarding-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -44,17 +44,42 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
 
 export default function AvailabilityStep() {
   const { 
-    availability, 
-    updateAvailability, 
-    setAvailabilityForAllDays,
+    availabilityInfo, 
+    updateAvailabilityInfo, 
     stepValidation, 
     currentStep 
   } = useProviderOnboardingStore();
   
+  // Work with weeklySchedule from availabilityInfo
+  const availability = availabilityInfo.weeklySchedule || [];
+  
   const validation = stepValidation[currentStep];
+  
+  // Helper functions to update availability
+  const updateAvailability = (dayOfWeek: number, updates: Partial<WeeklyAvailability>) => {
+    const newSchedule = [...availability];
+    const existingIndex = newSchedule.findIndex(a => a.dayOfWeek === dayOfWeek);
+    
+    if (existingIndex >= 0) {
+      newSchedule[existingIndex] = { ...newSchedule[existingIndex], ...updates };
+    } else {
+      newSchedule.push({ dayOfWeek, ...updates } as WeeklyAvailability);
+    }
+    
+    updateAvailabilityInfo({ weeklySchedule: newSchedule });
+  };
+  
+  const setAvailabilityForAllDays = (schedule: Partial<WeeklyAvailability>) => {
+    const newSchedule = DAYS_OF_WEEK.map(day => ({
+      dayOfWeek: day.value,
+      ...schedule
+    })) as WeeklyAvailability[];
+    
+    updateAvailabilityInfo({ weeklySchedule: newSchedule });
+  };
 
   const handleCopyToAll = (dayOfWeek: number) => {
-    const daySchedule = availability.find(a => a.dayOfWeek === dayOfWeek);
+    const daySchedule = (availabilityInfo.weeklySchedule || []).find(a => a.dayOfWeek === dayOfWeek);
     if (daySchedule) {
       setAvailabilityForAllDays({
         startTime: daySchedule.startTime,

@@ -52,6 +52,11 @@ const STEP_CONFIG = {
     description: "Tell us about yourself and your expertise",
     component: BasicInfoStep,
   },
+  [OnboardingStep.LOCATION]: {
+    title: "Location",
+    description: "Where do you provide services",
+    component: BasicInfoStep,
+  },
   [OnboardingStep.SERVICES]: {
     title: "Services & Pricing",
     description: "Define what services you offer and their pricing",
@@ -62,15 +67,15 @@ const STEP_CONFIG = {
     description: "Set your weekly availability schedule",
     component: AvailabilityStep,
   },
-  [OnboardingStep.IMAGES]: {
-    title: "Profile Media",
-    description: "Add photos to make your profile stand out",
-    component: ImagesStep,
-  },
-  [OnboardingStep.STRIPE_SETUP]: {
+  [OnboardingStep.PAYMENT]: {
     title: "Payment Setup",
     description: "Connect your Stripe account to receive payments",
     component: StripeSetupStep,
+  },
+  [OnboardingStep.ADDITIONAL]: {
+    title: "Profile Media",
+    description: "Add photos to make your profile stand out",
+    component: ImagesStep,
   },
   [OnboardingStep.REVIEW]: {
     title: "Review & Submit",
@@ -92,13 +97,13 @@ export default function OnboardingWizard() {
     setSubmitting,
     setSubmitError,
     validateStep,
-    markStepComplete,
     goToStep,
     basicInfo,
-    services,
-    availability,
-    images,
-    stripeStatus,
+    locationInfo,
+    servicesInfo,
+    availabilityInfo,
+    paymentInfo,
+    additionalInfo,
   } = useProviderOnboardingStore();
   
   const currentStepValidation = useCurrentStepValidation();
@@ -144,7 +149,7 @@ export default function OnboardingWizard() {
         toast.error("Please complete all required fields before proceeding");
         return;
       }
-      markStepComplete(currentStep);
+      // Step completion is tracked automatically by the store
     }
     
     goToStep(newStep);
@@ -161,7 +166,7 @@ export default function OnboardingWizard() {
         OnboardingStep.BASIC_INFO,
         OnboardingStep.SERVICES,
         OnboardingStep.AVAILABILITY,
-        OnboardingStep.STRIPE_SETUP,
+        OnboardingStep.PAYMENT,
       ];
 
       for (const step of stepsToValidate) {
@@ -174,15 +179,15 @@ export default function OnboardingWizard() {
 
       // Create provider profile
       const providerData = {
-        displayName: basicInfo.displayName,
+        displayName: basicInfo.displayName || '',
         tagline: basicInfo.tagline,
         bio: basicInfo.bio,
-        locationCity: basicInfo.locationCity,
-        locationState: basicInfo.locationState,
-        locationCountry: basicInfo.locationCountry,
-        yearsExperience: basicInfo.yearsExperience || undefined,
-        hourlyRate: basicInfo.hourlyRate || undefined,
-        services: services.map((service) => ({
+        locationCity: locationInfo.city,
+        locationState: locationInfo.state,
+        locationCountry: locationInfo.country,
+        yearsExperience: basicInfo.yearsOfExperience,
+        hourlyRate: basicInfo.hourlyRate,
+        services: (servicesInfo.services || []).map((service) => ({
           name: service.name,
           description: service.description,
           duration: service.duration,
