@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, numeric, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, numeric, integer, boolean, jsonb } from "drizzle-orm/pg-core";
 import { providersTable } from "./providers-schema";
 import { profilesTable } from "./profiles-schema";
 
@@ -55,6 +55,31 @@ export const bookingsTable = pgTable("bookings", {
   
   // Guest booking flag
   isGuestBooking: boolean("is_guest_booking").default(false).notNull(),
+  
+  // Universal booking type
+  bookingType: text("booking_type", { 
+    enum: ["service", "event", "space"] 
+  }).default("service").notNull(),
+  
+  // References to other entities (nullable based on booking type)
+  eventId: uuid("event_id"), // For event bookings
+  spaceId: uuid("space_id"), // For space bookings
+  serviceId: uuid("service_id"), // For service bookings
+  
+  // Additional metadata for different booking types
+  metadata: jsonb("metadata").$type<{
+    // Event specific
+    numberOfGuests?: number;
+    dietaryRestrictions?: string;
+    
+    // Space specific
+    purpose?: string;
+    setupRequirements?: string;
+    
+    // Service specific
+    location?: string;
+    urgency?: string;
+  }>().default({}),
   
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),
