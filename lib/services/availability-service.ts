@@ -13,6 +13,7 @@ import {
   bookingsTable,
   servicesTable,
   providersTable,
+  bookingPerformanceLogTable,
   type TimeSlot
 } from "@/db/schema/enhanced-booking-schema";
 import { eq, and, gte, lte, or, isNull, not, inArray } from "drizzle-orm";
@@ -134,7 +135,7 @@ export class AvailabilityService {
             eq(availabilityCacheTable.isAvailable, true),
             or(
               isNull(availabilityCacheTable.lockedUntil),
-              lte(availabilityCacheTable.lockedUntil, new Date())
+              lte(availabilityCacheTable.lockedUntil, new Date().toISOString())
             )
           )
         )
@@ -214,7 +215,7 @@ export class AvailabilityService {
           eq(availabilityCacheTable.isAvailable, true),
           or(
             isNull(availabilityCacheTable.lockedUntil),
-            lte(availabilityCacheTable.lockedUntil, new Date())
+            lte(availabilityCacheTable.lockedUntil, new Date().toISOString())
           )
         )
       )
@@ -275,7 +276,7 @@ export class AvailabilityService {
    * Clean up expired locks and cache entries
    */
   async cleanupExpiredData(): Promise<{ locks: number; cache: number }> {
-    const now = new Date();
+    const now = new Date().toISOString();
 
     // Release expired locks
     const releasedLocks = await db
@@ -490,7 +491,7 @@ export class AvailabilityService {
           startTime: slot.startTime,
           endTime: slot.endTime,
           isAvailable: slot.isAvailable,
-          isBooked: slot.isBooked || false,
+          isBooked: slot.isBooked ?? undefined,
           expiresAt
         })
         .onConflictDoUpdate({
@@ -502,8 +503,8 @@ export class AvailabilityService {
           ],
           set: {
             isAvailable: slot.isAvailable,
-            isBooked: slot.isBooked || false,
-            computedAt: new Date(),
+            isBooked: slot.isBooked ?? undefined,
+            computedAt: new Date().toISOString(),
             expiresAt
           }
         });
@@ -525,7 +526,7 @@ export class AvailabilityService {
           eq(availabilityCacheTable.isAvailable, true),
           or(
             isNull(availabilityCacheTable.lockedUntil),
-            lte(availabilityCacheTable.lockedUntil, new Date())
+            lte(availabilityCacheTable.lockedUntil, new Date().toISOString())
           )
         )
       )

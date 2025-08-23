@@ -221,7 +221,7 @@ export async function uploadGalleryImage(
   
   // Generate file path
   const extension = file.name.split('.').pop() || 'jpg'
-  const path = generateProviderImagePath(userId, `gallery-${index}`, extension)
+  const path = generateProviderImagePath(userId, ImageType.GALLERY, extension, index)
   
   // Upload to Supabase Storage
   const { data, error } = await supabase.storage

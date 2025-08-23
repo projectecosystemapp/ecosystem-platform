@@ -191,7 +191,7 @@ export class PayoutService {
       if (!provider || !booking) continue;
 
       // Check if enough time has passed for retry
-      const retryDelay = this.getRetryDelayMs(payout.retryCount);
+      const retryDelay = this.getRetryDelayMs(payout.retryCount ?? 0);
       const lastAttempt = payout.updatedAt || payout.createdAt;
       const nextRetryTime = new Date(lastAttempt.getTime() + retryDelay);
 
@@ -344,7 +344,7 @@ export class PayoutService {
       .update(payoutSchedulesTable)
       .set({ 
         status: 'processing',
-        ...(isRetry && { retryCount: payout.retryCount + 1 })
+        ...(isRetry && { retryCount: (payout.retryCount ?? 0) + 1 })
       })
       .where(eq(payoutSchedulesTable.id, payout.id));
 
@@ -403,7 +403,7 @@ export class PayoutService {
     isRetry: boolean = false
   ): Promise<void> {
     const isRetryable = this.isRetryableError(error);
-    const hasRetriesLeft = payout.retryCount < this.MAX_RETRY_ATTEMPTS - 1;
+    const hasRetriesLeft = (payout.retryCount ?? 0) < this.MAX_RETRY_ATTEMPTS - 1;
     
     const newStatus = (isRetryable && hasRetriesLeft) ? 'failed' : 'cancelled';
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -413,7 +413,7 @@ export class PayoutService {
       .set({
         status: newStatus,
         failureReason: errorMessage,
-        ...(isRetry && { retryCount: payout.retryCount + 1 })
+        ...(isRetry && { retryCount: (payout.retryCount ?? 0) + 1 })
       })
       .where(eq(payoutSchedulesTable.id, payout.id));
 
@@ -421,7 +421,7 @@ export class PayoutService {
     await this.logPayoutEvent(payout.id, 'payout_failed', {
       error: errorMessage,
       isRetryable,
-      retryCount: isRetry ? payout.retryCount + 1 : payout.retryCount,
+      retryCount: isRetry ? (payout.retryCount ?? 0) + 1 : (payout.retryCount ?? 0),
       finalFailure: !isRetryable || !hasRetriesLeft
     });
   }

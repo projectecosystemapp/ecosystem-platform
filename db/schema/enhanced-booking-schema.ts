@@ -434,5 +434,8 @@ export interface BookingSearchFilters {
 export { 
   providerAvailabilityTable,
   providerBlockedSlotsTable,
-  providerTestimonialsTable
+  providerTestimonialsTable,
+  providersTable
 } from './providers-schema';
+
+export { bookingsTable } from './bookings-schema';

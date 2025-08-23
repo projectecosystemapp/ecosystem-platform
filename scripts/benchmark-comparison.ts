@@ -137,7 +137,6 @@ class BenchmarkComparison {
           minPrice: 50,
           maxPrice: 150,
           minRating: 4.0,
-          isVerified: true,
           sortBy: 'rating',
           limit: 20
         });
@@ -148,7 +147,6 @@ class BenchmarkComparison {
           minPrice: 50,
           maxPrice: 150,
           minRating: 4.0,
-          isVerified: true,
           limit: 20
         });
       }

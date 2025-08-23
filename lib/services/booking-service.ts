@@ -16,10 +16,9 @@ import {
   BookingStatus,
   VALID_STATUS_TRANSITIONS,
   type CreateBookingRequest,
-  type BookingConflictError,
-  type BookingValidationError,
   type BookingStatusType
 } from "@/db/schema/enhanced-booking-schema";
+import { bookingPerformanceLogTable } from "@/db/schema/enhanced-booking-schema";
 import { eq, and, gte, lte, inArray, or } from "drizzle-orm";
 import { calculatePlatformFee, getPlatformFeeRate } from "@/lib/platform-fee";
 import { createPaymentIntentWithIdempotency } from "@/lib/stripe-enhanced";
@@ -208,10 +207,10 @@ export class BookingService {
         .update(bookingsTable)
         .set({ 
           status: newStatus,
-          updatedAt: new Date(),
-          ...(newStatus === BookingStatus.COMPLETED && { completedAt: new Date() }),
+          updatedAt: new Date().toISOString(),
+          ...(newStatus === BookingStatus.COMPLETED && { completedAt: new Date().toISOString() }),
           ...(newStatus === BookingStatus.CANCELLED && { 
-            cancelledAt: new Date(),
+            cancelledAt: new Date().toISOString(),
             cancelledBy: triggeredBy,
             cancellationReason: reason 
           })
@@ -233,7 +232,7 @@ export class BookingService {
     });
     
     // Invalidate caches
-    await this.invalidateBookingCaches(booking.providerId, booking.bookingDate);
+    await this.invalidateBookingCaches(booking.booking.providerId, booking.booking.bookingDate);
   }
   
   /**
@@ -418,7 +417,7 @@ export class BookingService {
     
     // Validate advance booking requirements
     const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-    if (hoursUntilBooking < service.advanceBookingHours) {
+    if (service.advanceBookingHours && hoursUntilBooking < service.advanceBookingHours) {
       throw new BookingValidationError(
         `Booking must be made at least ${service.advanceBookingHours} hours in advance`,
         'bookingDate',
@@ -469,7 +468,7 @@ export class BookingService {
             eq(availabilityCacheTable.isAvailable, true),
             or(
               eq(availabilityCacheTable.lockedUntil, null),
-              lte(availabilityCacheTable.lockedUntil, new Date())
+              lte(availabilityCacheTable.lockedUntil, new Date().toISOString())
             )
           )
         )
@@ -487,8 +486,8 @@ export class BookingService {
       .update(availabilityCacheTable)
       .set({
         isAvailable: true,
-        isBooked: false,
-        bookingId: null,
+        isBooked: undefined,
+        bookingId: undefined,
         lockedUntil: null,
         lockedBySession: null
       })
@@ -533,8 +532,8 @@ export class BookingService {
           .update(availabilityCacheTable)
           .set({
             isAvailable: true,
-            isBooked: false,
-            bookingId: null
+            isBooked: undefined,
+            bookingId: undefined
           })
           .where(eq(availabilityCacheTable.bookingId, booking.id));
         break;
@@ -573,7 +572,7 @@ export class BookingService {
     }
     
     // Default policy: full refund if cancelled 24+ hours before
-    if (hoursUntilBooking >= service.cancellationHours) {
+    if (service.cancellationHours && hoursUntilBooking >= service.cancellationHours) {
       return booking.totalAmount;
     }
     

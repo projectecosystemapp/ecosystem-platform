@@ -154,7 +154,7 @@ if (isRedisConfigured) {
 /**
  * Core rate limiting function with Redis/in-memory fallback
  */
-async function checkRateLimit(
+export async function checkRateLimit(
   identifier: string,
   type: keyof typeof RATE_LIMIT_CONFIGS
 ): Promise<RateLimitResult> {
