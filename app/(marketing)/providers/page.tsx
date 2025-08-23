@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { searchProvidersAction } from "@/actions/providers-actions";
 import ProvidersSearchClient from "./providers-search-client";
 import { ProviderCardSkeleton } from "@/components/provider/search/ProviderCard";
+import { PopularSearches } from "@/components/provider/search/PopularSearches";
 
 export const metadata: Metadata = {
   title: "Find Service Providers | Ecosystem Marketplace",
@@ -93,7 +94,7 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
     verifiedOnly: searchParams.verified === "true",
     hasInsurance: searchParams.insurance === "true",
     instantBooking: searchParams.instant === "true",
-    sortBy: searchParams.sort || "relevance",
+    sortBy: (searchParams.sort || "relevance") as any,
     page: searchParams.page ? parseInt(searchParams.page) : 1,
     pageSize: 12,
   };
@@ -108,7 +109,7 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
       searchProvidersAction(filters),
       searchProvidersAction({ 
         minRating: 4.5, 
-        isVerified: true,
+        verifiedOnly: true,
         pageSize: 3 
       } as any),
     ]);
@@ -139,16 +140,7 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
               Browse trusted professionals in your area. From photographers to personal trainers, 
               find the perfect provider for your needs.
             </p>
-            <div className="flex flex-wrap gap-2 mt-6">
-              <span className="text-sm text-muted-foreground">Popular searches:</span>
-              <button className="text-sm text-primary hover:underline">Photography</button>
-              <span className="text-muted-foreground">•</span>
-              <button className="text-sm text-primary hover:underline">Personal Training</button>
-              <span className="text-muted-foreground">•</span>
-              <button className="text-sm text-primary hover:underline">Home Cleaning</button>
-              <span className="text-muted-foreground">•</span>
-              <button className="text-sm text-primary hover:underline">Tutoring</button>
-            </div>
+            <PopularSearches />
           </div>
         </div>
       </div>

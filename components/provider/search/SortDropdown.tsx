@@ -21,12 +21,11 @@ import { cn } from "@/lib/utils";
 export type SortOption = 
   | "relevance" 
   | "rating" 
+  | "reviews"
   | "price_low" 
   | "price_high" 
-  | "recent" 
-  | "experience"
-  | "distance"
-  | "popularity";
+  | "newest"
+  | "distance";
 
 interface SortDropdownProps {
   value: SortOption;
@@ -50,6 +49,12 @@ const sortOptions = [
     description: "Top-rated providers first"
   },
   { 
+    value: "reviews" as SortOption, 
+    label: "Most Reviews", 
+    icon: Users,
+    description: "Most reviewed providers"
+  },
+  { 
     value: "price_low" as SortOption, 
     label: "Price: Low to High", 
     icon: DollarSign,
@@ -62,22 +67,10 @@ const sortOptions = [
     description: "Premium providers first"
   },
   { 
-    value: "recent" as SortOption, 
-    label: "Recently Active", 
+    value: "newest" as SortOption, 
+    label: "Recently Joined", 
     icon: Clock,
-    description: "Active in the last 7 days"
-  },
-  { 
-    value: "experience" as SortOption, 
-    label: "Most Experienced", 
-    icon: Users,
-    description: "Years of experience"
-  },
-  { 
-    value: "popularity" as SortOption, 
-    label: "Most Popular", 
-    icon: Users,
-    description: "Most bookings"
+    description: "Newest providers first"
   },
   { 
     value: "distance" as SortOption, 

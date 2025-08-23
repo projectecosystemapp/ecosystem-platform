@@ -9,6 +9,8 @@
     "lint": "next lint",
     "db:generate": "npx drizzle-kit generate",
     "db:migrate": "npx drizzle-kit migrate",
+    "db:push": "npx drizzle-kit push",
+    "db:studio": "npx drizzle-kit studio",
     "db:apply-indexes": "npx tsx scripts/apply-indexes.ts",
     "db:apply-indexes:dry": "npx tsx scripts/apply-indexes.ts --dry-run",
     "type-check": "tsc --noEmit",
@@ -95,6 +97,7 @@
     "lucide-react": "^0.436.0",
     "next": "^14.2.32",
     "next-themes": "^0.3.0",
+    "pg": "^8.16.3",
     "postgres": "^3.4.4",
     "react": "^18",
     "react-day-picker": "^8.10.1",
@@ -113,6 +116,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@faker-js/faker": "^9.9.0",
     "@playwright/test": "^1.55.0",
     "@remotion/cli": "^4.0.327",
     "@remotion/player": "^4.0.327",

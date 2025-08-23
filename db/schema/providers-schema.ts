@@ -23,6 +23,7 @@ export const providersTable = pgTable("providers", {
   // Location
   locationCity: text("location_city"),
   locationState: text("location_state"),
+  locationZipCode: text("location_zip_code"),
   locationCountry: text("location_country").default("US"),
   
   // Pricing
@@ -46,6 +47,8 @@ export const providersTable = pgTable("providers", {
   // Verification & Status
   isVerified: boolean("is_verified").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
+  hasInsurance: boolean("has_insurance").default(false).notNull(),
+  instantBooking: boolean("instant_booking").default(false).notNull(),
   
   // Stripe Connect
   stripeConnectAccountId: text("stripe_connect_account_id"),

@@ -11,6 +11,9 @@ import {
   generateUniqueSlug,
   getProviderAvailability,
   setProviderAvailability,
+  getAvailableServices,
+  getLocationSuggestions,
+  getPriceRangeStats,
 } from "@/db/queries/providers-queries";
 import { 
   type Provider, 
@@ -198,10 +201,19 @@ export async function searchProvidersAction(
     query?: string;
     city?: string;
     state?: string;
+    zipCode?: string;
     minPrice?: number;
     maxPrice?: number;
     minRating?: number;
-    isVerified?: boolean;
+    services?: string[];
+    verifiedOnly?: boolean;
+    hasInsurance?: boolean;
+    instantBooking?: boolean;
+    availability?: {
+      days?: string[];
+      timeOfDay?: string[];
+    };
+    sortBy?: 'relevance' | 'price_low' | 'price_high' | 'rating' | 'reviews' | 'distance' | 'newest';
     page?: number;
     pageSize?: number;
   }
@@ -212,7 +224,19 @@ export async function searchProvidersAction(
     const offset = (page - 1) * pageSize;
 
     const result = await searchProviders({
-      ...filters,
+      query: filters?.query,
+      city: filters?.city,
+      state: filters?.state,
+      zipCode: filters?.zipCode,
+      minPrice: filters?.minPrice,
+      maxPrice: filters?.maxPrice,
+      minRating: filters?.minRating,
+      services: filters?.services,
+      verifiedOnly: filters?.verifiedOnly,
+      hasInsurance: filters?.hasInsurance,
+      instantBooking: filters?.instantBooking,
+      availability: filters?.availability,
+      sortBy: filters?.sortBy,
       limit: pageSize,
       offset,
     });
@@ -223,6 +247,7 @@ export async function searchProvidersAction(
       data: result,
     };
   } catch (error) {
+    console.error("Search providers error:", error);
     return { isSuccess: false, message: "Failed to search providers" };
   }
 }
@@ -493,5 +518,63 @@ export async function setProviderAvailabilityAction(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Failed to update availability";
     return { isSuccess: false, message: errorMessage };
+  }
+}
+
+// Get available services with counts for filter UI
+export async function getAvailableServicesAction(): Promise<
+  ActionResult<Array<{ id: string; name: string; count: number }>>
+> {
+  try {
+    const services = await getAvailableServices();
+    
+    // Convert to format expected by UI
+    const servicesWithIds = services.map((service, index) => ({
+      id: `service-${index}`,
+      name: service.name,
+      count: service.count,
+    }));
+    
+    return {
+      isSuccess: true,
+      message: "Services retrieved successfully",
+      data: servicesWithIds,
+    };
+  } catch (error) {
+    return { isSuccess: false, message: "Failed to get services" };
+  }
+}
+
+// Get location suggestions for autocomplete
+export async function getLocationSuggestionsAction(
+  type: 'city' | 'state'
+): Promise<ActionResult<string[]>> {
+  try {
+    const suggestions = await getLocationSuggestions(type);
+    
+    return {
+      isSuccess: true,
+      message: "Location suggestions retrieved successfully",
+      data: suggestions,
+    };
+  } catch (error) {
+    return { isSuccess: false, message: "Failed to get location suggestions" };
+  }
+}
+
+// Get price range statistics
+export async function getPriceRangeStatsAction(): Promise<
+  ActionResult<{ min: number; max: number; avg: number }>
+> {
+  try {
+    const stats = await getPriceRangeStats();
+    
+    return {
+      isSuccess: true,
+      message: "Price range statistics retrieved successfully",
+      data: stats,
+    };
+  } catch (error) {
+    return { isSuccess: false, message: "Failed to get price range statistics" };
   }
 }

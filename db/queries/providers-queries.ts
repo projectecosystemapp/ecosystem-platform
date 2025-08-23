@@ -8,7 +8,7 @@ import {
   type ProviderAvailability,
   type NewProviderAvailability,
 } from "@/db/schema/providers-schema";
-import { eq, and, or, like, ilike, sql } from "drizzle-orm";
+import { eq, and, or, like, ilike, sql, inArray } from "drizzle-orm";
 
 // Create a new provider profile
 export async function createProvider(data: NewProvider): Promise<Provider> {
@@ -73,49 +73,214 @@ export async function searchProviders(
     query?: string;
     city?: string;
     state?: string;
+    zipCode?: string;
     minPrice?: number;
     maxPrice?: number;
     minRating?: number;
-    isVerified?: boolean;
+    services?: string[];
+    verifiedOnly?: boolean;
+    hasInsurance?: boolean;
+    instantBooking?: boolean;
+    availability?: {
+      days?: string[];
+      timeOfDay?: string[];
+    };
+    sortBy?: 'relevance' | 'price_low' | 'price_high' | 'rating' | 'reviews' | 'distance' | 'newest';
     limit?: number;
     offset?: number;
   }
 ): Promise<{ providers: Provider[]; total: number }> {
   const conditions = [eq(providersTable.isActive, true)];
   
+  // Text search across multiple fields
   if (filters?.query) {
     conditions.push(
       or(
         ilike(providersTable.displayName, `%${filters.query}%`),
         ilike(providersTable.tagline, `%${filters.query}%`),
         ilike(providersTable.bio, `%${filters.query}%`),
-        sql`${providersTable.services}::text ILIKE ${`%${filters.query}%`}`
+        sql`${providersTable.services}::text ILIKE ${'%' + filters.query + '%'}`
       )!
     );
   }
   
+  // Location filters
   if (filters?.city) {
-    conditions.push(eq(providersTable.locationCity, filters.city));
+    conditions.push(ilike(providersTable.locationCity, `%${filters.city}%`));
   }
   
   if (filters?.state) {
     conditions.push(eq(providersTable.locationState, filters.state));
   }
   
+  if (filters?.zipCode) {
+    // Add zip code proximity search later with PostGIS
+    conditions.push(eq(providersTable.locationZipCode, filters.zipCode));
+  }
+  
+  // Price range filters
   if (filters?.minPrice !== undefined) {
-    conditions.push(sql`${providersTable.hourlyRate} >= ${filters.minPrice}`);
+    conditions.push(sql`CAST(${providersTable.hourlyRate} AS DECIMAL) >= CAST(${filters.minPrice} AS DECIMAL)`);
   }
   
   if (filters?.maxPrice !== undefined) {
-    conditions.push(sql`${providersTable.hourlyRate} <= ${filters.maxPrice}`);
+    conditions.push(sql`CAST(${providersTable.hourlyRate} AS DECIMAL) <= CAST(${filters.maxPrice} AS DECIMAL)`);
   }
   
-  if (filters?.minRating !== undefined) {
-    conditions.push(sql`${providersTable.averageRating} >= ${filters.minRating}`);
+  // Rating filter
+  if (filters?.minRating !== undefined && filters.minRating > 0) {
+    conditions.push(sql`CAST(${providersTable.averageRating} AS DECIMAL) >= CAST(${filters.minRating} AS DECIMAL)`);
   }
   
-  if (filters?.isVerified !== undefined) {
-    conditions.push(eq(providersTable.isVerified, filters.isVerified));
+  // Service filters - check if provider offers any of the selected services
+  if (filters?.services && filters.services.length > 0) {
+    const serviceConditions = filters.services.map(service => 
+      sql`${providersTable.services}::text ILIKE ${'%' + service + '%'}`
+    );
+    conditions.push(or(...serviceConditions)!);
+  }
+  
+  // Boolean filters
+  if (filters?.verifiedOnly) {
+    conditions.push(eq(providersTable.isVerified, true));
+  }
+  
+  if (filters?.hasInsurance) {
+    conditions.push(eq(providersTable.hasInsurance, true));
+  }
+  
+  if (filters?.instantBooking) {
+    conditions.push(eq(providersTable.instantBooking, true));
+  }
+  
+  // Availability filters - filter by providers who have availability on specific days
+  let providerIdsWithAvailability: string[] | null = null;
+  
+  if (filters?.availability?.days && filters.availability.days.length > 0) {
+    const dayNumbers: number[] = [];
+    
+    filters.availability.days.forEach(day => {
+      if (day === 'Weekdays') {
+        dayNumbers.push(1, 2, 3, 4, 5); // Monday to Friday
+      } else if (day === 'Weekends') {
+        dayNumbers.push(0, 6); // Sunday and Saturday
+      } else {
+        // Map day names to numbers
+        const dayMap: Record<string, number> = {
+          'Sunday': 0,
+          'Monday': 1,
+          'Tuesday': 2,
+          'Wednesday': 3,
+          'Thursday': 4,
+          'Friday': 5,
+          'Saturday': 6,
+        };
+        if (dayMap[day] !== undefined) {
+          dayNumbers.push(dayMap[day]);
+        }
+      }
+    });
+    
+    if (dayNumbers.length > 0) {
+      const availableProviders = await db
+        .selectDistinct({
+          providerId: providerAvailabilityTable.providerId,
+        })
+        .from(providerAvailabilityTable)
+        .where(
+          and(
+            inArray(providerAvailabilityTable.dayOfWeek, dayNumbers),
+            eq(providerAvailabilityTable.isActive, true)
+          )
+        );
+      
+      providerIdsWithAvailability = availableProviders.map(p => p.providerId);
+      
+      // If time of day filter is also specified, further filter
+      if (filters.availability.timeOfDay && filters.availability.timeOfDay.length > 0) {
+        const timeConditions: any[] = [];
+        
+        filters.availability.timeOfDay.forEach(timeSlot => {
+          if (timeSlot === 'Morning') {
+            timeConditions.push(sql`${providerAvailabilityTable.startTime} <= '12:00'`);
+          } else if (timeSlot === 'Afternoon') {
+            timeConditions.push(
+              and(
+                sql`${providerAvailabilityTable.startTime} <= '17:00'`,
+                sql`${providerAvailabilityTable.endTime} >= '12:00'`
+              )
+            );
+          } else if (timeSlot === 'Evening') {
+            timeConditions.push(
+              and(
+                sql`${providerAvailabilityTable.startTime} <= '21:00'`,
+                sql`${providerAvailabilityTable.endTime} >= '17:00'`
+              )
+            );
+          } else if (timeSlot === 'Night') {
+            timeConditions.push(sql`${providerAvailabilityTable.endTime} >= '21:00'`);
+          }
+        });
+        
+        if (timeConditions.length > 0) {
+          const timeFilteredProviders = await db
+            .selectDistinct({
+              providerId: providerAvailabilityTable.providerId,
+            })
+            .from(providerAvailabilityTable)
+            .where(
+              and(
+                inArray(providerAvailabilityTable.dayOfWeek, dayNumbers),
+                eq(providerAvailabilityTable.isActive, true),
+                or(...timeConditions)!
+              )
+            );
+          
+          providerIdsWithAvailability = timeFilteredProviders.map(p => p.providerId);
+        }
+      }
+    }
+  }
+  
+  // Apply availability filter if we have provider IDs
+  if (providerIdsWithAvailability !== null) {
+    if (providerIdsWithAvailability.length === 0) {
+      // No providers match the availability criteria
+      return { providers: [], total: 0 };
+    }
+    conditions.push(inArray(providersTable.id, providerIdsWithAvailability));
+  }
+  
+  // Determine sort order
+  let orderByClause;
+  switch (filters?.sortBy) {
+    case 'price_low':
+      orderByClause = sql`CAST(${providersTable.hourlyRate} AS DECIMAL) ASC NULLS LAST`;
+      break;
+    case 'price_high':
+      orderByClause = sql`CAST(${providersTable.hourlyRate} AS DECIMAL) DESC NULLS LAST`;
+      break;
+    case 'rating':
+      orderByClause = sql`CAST(${providersTable.averageRating} AS DECIMAL) DESC NULLS LAST`;
+      break;
+    case 'reviews':
+      orderByClause = sql`${providersTable.totalReviews} DESC`;
+      break;
+    case 'newest':
+      orderByClause = sql`${providersTable.createdAt} DESC`;
+      break;
+    case 'relevance':
+    default:
+      // For relevance, prioritize verified providers with high ratings and reviews
+      orderByClause = sql`
+        CASE 
+          WHEN ${providersTable.isVerified} = true THEN 1 
+          ELSE 0 
+        END DESC,
+        CAST(${providersTable.averageRating} AS DECIMAL) DESC NULLS LAST,
+        ${providersTable.totalReviews} DESC
+      `;
+      break;
   }
   
   const [providersResult, countResult] = await Promise.all([
@@ -125,7 +290,7 @@ export async function searchProviders(
       .where(and(...conditions))
       .limit(filters?.limit || 20)
       .offset(filters?.offset || 0)
-      .orderBy(providersTable.averageRating),
+      .orderBy(orderByClause),
     db
       .select({ count: sql<number>`count(*)` })
       .from(providersTable)
@@ -311,4 +476,103 @@ export async function updateProviderRating(
       updatedAt: new Date(),
     })
     .where(eq(providersTable.id, providerId));
+}
+
+// Get available services with provider counts
+export async function getAvailableServices(): Promise<
+  Array<{ name: string; count: number }>
+> {
+  const providers = await db
+    .select({
+      services: providersTable.services,
+    })
+    .from(providersTable)
+    .where(eq(providersTable.isActive, true));
+
+  // Extract and count unique services
+  const serviceCounts = new Map<string, number>();
+  
+  providers.forEach(provider => {
+    if (provider.services && Array.isArray(provider.services)) {
+      provider.services.forEach((service: any) => {
+        if (service.name) {
+          const currentCount = serviceCounts.get(service.name) || 0;
+          serviceCounts.set(service.name, currentCount + 1);
+        }
+      });
+    }
+  });
+
+  // Convert to array and sort by count
+  return Array.from(serviceCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// Get location suggestions for autocomplete
+export async function getLocationSuggestions(
+  type: 'city' | 'state'
+): Promise<string[]> {
+  if (type === 'city') {
+    const results = await db
+      .selectDistinct({
+        city: providersTable.locationCity,
+      })
+      .from(providersTable)
+      .where(
+        and(
+          eq(providersTable.isActive, true),
+          sql`${providersTable.locationCity} IS NOT NULL`
+        )
+      )
+      .orderBy(providersTable.locationCity);
+    
+    return results
+      .map(r => r.city)
+      .filter((city): city is string => city !== null);
+  } else {
+    const results = await db
+      .selectDistinct({
+        state: providersTable.locationState,
+      })
+      .from(providersTable)
+      .where(
+        and(
+          eq(providersTable.isActive, true),
+          sql`${providersTable.locationState} IS NOT NULL`
+        )
+      )
+      .orderBy(providersTable.locationState);
+    
+    return results
+      .map(r => r.state)
+      .filter((state): state is string => state !== null);
+  }
+}
+
+// Get price range statistics
+export async function getPriceRangeStats(): Promise<{
+  min: number;
+  max: number;
+  avg: number;
+}> {
+  const [stats] = await db
+    .select({
+      min: sql<number>`MIN(CAST(${providersTable.hourlyRate} AS DECIMAL))`,
+      max: sql<number>`MAX(CAST(${providersTable.hourlyRate} AS DECIMAL))`,
+      avg: sql<number>`AVG(CAST(${providersTable.hourlyRate} AS DECIMAL))`,
+    })
+    .from(providersTable)
+    .where(
+      and(
+        eq(providersTable.isActive, true),
+        sql`${providersTable.hourlyRate} IS NOT NULL`
+      )
+    );
+
+  return {
+    min: stats?.min || 0,
+    max: stats?.max || 500,
+    avg: stats?.avg || 0,
+  };
 }

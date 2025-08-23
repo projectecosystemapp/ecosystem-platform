@@ -180,7 +180,7 @@ export default function ProvidersSearchClient({
               Verified only
             </Badge>
           )}
-          {filters.priceRange[0] > 0 || filters.priceRange[1] < 500 && (
+          {(filters.priceRange[0] > 0 || filters.priceRange[1] < 500) && (
             <Badge variant="secondary">
               ${filters.priceRange[0]}-${filters.priceRange[1]}
             </Badge>

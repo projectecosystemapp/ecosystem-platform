@@ -127,6 +127,7 @@ export function useProviderSearch(
       maxPrice: filters.priceRange[1],
       minRating: filters.minRating,
       services: filters.services,
+      availability: filters.availability,
       verifiedOnly: filters.verifiedOnly,
       hasInsurance: filters.hasInsurance,
       instantBooking: filters.instantBooking,
@@ -152,6 +153,9 @@ export function useProviderSearch(
         verifiedOnly: filters.verifiedOnly || undefined,
         hasInsurance: filters.hasInsurance || undefined,
         instantBooking: filters.instantBooking || undefined,
+        availability: filters.availability && (filters.availability.days?.length || filters.availability.timeOfDay?.length) 
+          ? filters.availability 
+          : undefined,
         sortBy,
         page: currentPage,
         pageSize,
@@ -276,13 +280,14 @@ export function useProviderSearch(
   useEffect(() => {
     if (currentPage < totalPages) {
       const nextPageKey = buildQueryKey();
-      nextPageKey[2].page = currentPage + 1;
+      const queryParams = nextPageKey[2] as any;
+      queryParams.page = currentPage + 1;
       
       queryClient.prefetchQuery({
         queryKey: nextPageKey,
         queryFn: async () => {
           const searchFilters: any = {
-            ...nextPageKey[2],
+            ...queryParams,
             page: currentPage + 1,
           };
           const result = await searchProvidersAction(searchFilters);

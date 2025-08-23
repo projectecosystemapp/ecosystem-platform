@@ -97,6 +97,7 @@ const nextConfig = {
       'img.clerk.com',
       'www.gravatar.com',
       'lh3.googleusercontent.com',
+      'api.dicebear.com',
     ],
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 60,

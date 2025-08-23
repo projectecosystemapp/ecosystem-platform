@@ -78,6 +78,13 @@
       "when": 1755840070386,
       "tag": "0010_large_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1755963453806,
+      "tag": "0011_striped_hiroim",
+      "breakpoints": true
     }
   ]
 }
