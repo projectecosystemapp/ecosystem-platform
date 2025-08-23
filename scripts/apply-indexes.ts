@@ -146,7 +146,8 @@ async function applyIndexes(dryRun: boolean = false): Promise<void> {
       
       for (const table of tables) {
         try {
-          await db.execute(sql.raw(`ANALYZE ${table}`));
+          // Use sql.identifier for safe table name handling
+          await db.execute(sql`ANALYZE ${sql.identifier(table)}`);
           console.log(chalk.green(`✅ Analyzed ${table}`));
         } catch (error) {
           console.log(chalk.yellow(`⚠️  Could not analyze ${table} (might not exist)`));

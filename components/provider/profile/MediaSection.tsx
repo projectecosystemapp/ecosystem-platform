@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Provider } from "@/db/schema/providers-schema";
 import { ImageUpload, GalleryUpload } from "@/components/provider/image-upload";
 import { updateProviderProfileAction } from "@/actions/providers-actions";
-import { uploadProviderImage, deleteProviderImage } from "@/lib/supabase/storage-helpers";
+import { uploadProviderImage, deleteProviderImage, ImageType } from "@/lib/supabase/storage-helpers";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Camera, Image as ImageIcon, Loader2 } from "lucide-react";
@@ -35,7 +35,7 @@ export function MediaSection({
 
     try {
       // Upload to Supabase
-      const publicUrl = await uploadProviderImage(file, provider.id, "profile");
+      const publicUrl = await uploadProviderImage(file, ImageType.PROFILE, provider.id);
 
       // Update provider profile
       const result = await updateProviderProfileAction(provider.id, {
@@ -91,7 +91,7 @@ export function MediaSection({
 
     try {
       // Upload to Supabase
-      const publicUrl = await uploadProviderImage(file, provider.id, "cover");
+      const publicUrl = await uploadProviderImage(file, ImageType.COVER, provider.id);
 
       // Update provider profile
       const result = await updateProviderProfileAction(provider.id, {
@@ -148,8 +148,9 @@ export function MediaSection({
       // Upload to Supabase
       const publicUrl = await uploadProviderImage(
         file,
+        ImageType.GALLERY,
         provider.id,
-        `gallery-${index}`
+        index
       );
 
       // Update gallery images array

@@ -278,9 +278,19 @@ export async function logNotification(notification: {
  */
 export async function cleanupOldWebhookEvents(daysToKeep: number = 30): Promise<number> {
   try {
+    // Validate input to prevent injection
+    if (!Number.isInteger(daysToKeep) || daysToKeep < 0 || daysToKeep > 365) {
+      throw new Error('Invalid daysToKeep parameter: must be integer between 0 and 365');
+    }
+    
+    // Use parameterized query with safe date calculation
+    // Instead of string interpolation, calculate the date in JavaScript
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    
     const result = await db.execute(sql`
       DELETE FROM webhook_events 
-      WHERE created_at < NOW() - INTERVAL '${sql.raw(daysToKeep.toString())} days'
+      WHERE created_at < ${cutoffDate}
       AND status IN ('completed', 'failed')
     `);
     

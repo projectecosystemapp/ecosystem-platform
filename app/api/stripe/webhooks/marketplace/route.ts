@@ -5,6 +5,7 @@ import { bookingsTable, transactionsTable } from "@/db/schema/bookings-schema";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import Stripe from "stripe";
+import { withRateLimit } from "@/lib/rate-limit";
 
 const relevantEvents = new Set([
   "payment_intent.succeeded",
@@ -16,7 +17,12 @@ const relevantEvents = new Set([
   "application_fee.refunded",
 ]);
 
-export async function POST(req: NextRequest) {
+/**
+ * POST /api/stripe/webhooks/marketplace
+ * Handle Stripe marketplace webhook events
+ * Rate limited: 100 requests per minute from Stripe IPs
+ */
+export const POST = withRateLimit('webhook', async (req: NextRequest) => {
   const body = await req.text();
   const sig = headers().get("Stripe-Signature") as string;
   const webhookSecret = process.env.STRIPE_MARKETPLACE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
@@ -84,7 +90,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ received: true });
-}
+});
 
 async function handlePaymentIntentSucceeded(event: Stripe.Event) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;

@@ -25,8 +25,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/db/schema/providers-schema";
 
+interface ExtendedProvider extends Provider {
+  instantBooking?: boolean;
+  totalBookings?: number;
+  hasInsurance?: boolean;
+  responseTime?: string;
+}
+
 interface ProviderCardProps {
-  provider: Provider;
+  provider: ExtendedProvider;
   viewMode?: "grid" | "list" | "map";
   showFavorite?: boolean;
   onFavoriteToggle?: (providerId: string) => void;

@@ -3,7 +3,7 @@
  * Handles timezone conversions, availability calculations, aggregations, and fee calculations
  */
 
-import { formatInTimeZone, zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
+import { formatInTimeZone, toZonedTime, fromZonedTime } from "date-fns-tz";
 import { 
   format, 
   parseISO, 
@@ -50,7 +50,7 @@ export class TimeZoneConverter {
     localDate.setHours(hours, minutes, 0, 0);
     
     // Convert to UTC
-    const utcDate = zonedTimeToUtc(localDate, providerTimezone);
+    const utcDate = fromZonedTime(localDate, providerTimezone);
     
     return {
       utcDate,
@@ -72,7 +72,7 @@ export class TimeZoneConverter {
     utcDateTime.setHours(hours, minutes, 0, 0);
     
     // Convert to provider timezone
-    const localDateTime = utcToZonedTime(utcDateTime, providerTimezone);
+    const localDateTime = toZonedTime(utcDateTime, providerTimezone);
     
     return {
       localDate: new Date(localDateTime.getFullYear(), localDateTime.getMonth(), localDateTime.getDate()),

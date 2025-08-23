@@ -329,11 +329,12 @@ export class DataConsistencyChecker {
       WHERE b.status = 'completed' AND t.id IS NULL
     `);
 
-    if (parseInt(bookingsWithoutTransactions.rows[0]?.count || '0') > 0) {
+    const transactionCount = bookingsWithoutTransactions[0]?.count;
+    if (transactionCount && parseInt(String(transactionCount)) > 0) {
       issues.push({
         type: 'missing_transactions',
         description: 'Completed bookings without transaction records',
-        count: parseInt(bookingsWithoutTransactions.rows[0].count)
+        count: parseInt(String(transactionCount))
       });
     }
 
@@ -344,11 +345,11 @@ export class DataConsistencyChecker {
       WHERE ABS((service_price + platform_fee) - total_amount) > 0.01
     `);
 
-    if (parseInt(pricingInconsistencies.rows[0]?.count || '0') > 0) {
+    if (parseInt(String(pricingInconsistencies[0]?.count || '0')) > 0) {
       issues.push({
         type: 'pricing_inconsistency',
         description: 'Bookings with incorrect total amount calculations',
-        count: parseInt(pricingInconsistencies.rows[0].count)
+        count: parseInt(String(pricingInconsistencies[0].count))
       });
     }
 
@@ -360,11 +361,11 @@ export class DataConsistencyChecker {
       WHERE p.id IS NULL
     `);
 
-    if (parseInt(orphanedBookings.rows[0]?.count || '0') > 0) {
+    if (parseInt(String(orphanedBookings[0]?.count || '0')) > 0) {
       issues.push({
         type: 'orphaned_bookings',
         description: 'Bookings referencing non-existent providers',
-        count: parseInt(orphanedBookings.rows[0].count)
+        count: parseInt(String(orphanedBookings[0].count))
       });
     }
 
@@ -375,11 +376,11 @@ export class DataConsistencyChecker {
       WHERE start_time >= end_time
     `);
 
-    if (parseInt(invalidTimeRanges.rows[0]?.count || '0') > 0) {
+    if (parseInt(String(invalidTimeRanges[0]?.count || '0')) > 0) {
       issues.push({
         type: 'invalid_time_ranges',
         description: 'Bookings with invalid time ranges (start >= end)',
-        count: parseInt(invalidTimeRanges.rows[0].count)
+        count: parseInt(String(invalidTimeRanges[0].count))
       });
     }
 
@@ -406,11 +407,11 @@ export class DataConsistencyChecker {
       WHERE p.is_active = true AND pa.id IS NULL
     `);
 
-    if (parseInt(providersWithoutAvailability.rows[0]?.count || '0') > 0) {
+    if (parseInt(String(providersWithoutAvailability[0]?.count || '0')) > 0) {
       issues.push({
         type: 'no_availability',
         description: 'Active providers without availability schedules',
-        count: parseInt(providersWithoutAvailability.rows[0].count)
+        count: parseInt(String(providersWithoutAvailability[0].count))
       });
     }
 
@@ -422,11 +423,11 @@ export class DataConsistencyChecker {
         AND (stripe_connect_account_id IS NULL OR stripe_onboarding_complete = false)
     `);
 
-    if (parseInt(incompleteStripeSetup.rows[0]?.count || '0') > 0) {
+    if (parseInt(String(incompleteStripeSetup[0]?.count || '0')) > 0) {
       issues.push({
         type: 'incomplete_stripe',
         description: 'Active providers with incomplete Stripe setup',
-        count: parseInt(incompleteStripeSetup.rows[0].count)
+        count: parseInt(String(incompleteStripeSetup[0].count))
       });
     }
 
@@ -448,11 +449,11 @@ export class DataConsistencyChecker {
         OR p.total_reviews != ar.review_count
     `);
 
-    if (parseInt(ratingInconsistencies.rows[0]?.count || '0') > 0) {
+    if (parseInt(String(ratingInconsistencies[0]?.count || '0')) > 0) {
       issues.push({
         type: 'rating_inconsistency',
         description: 'Providers with incorrect rating/review calculations',
-        count: parseInt(ratingInconsistencies.rows[0].count)
+        count: parseInt(String(ratingInconsistencies[0].count))
       });
     }
 
@@ -496,7 +497,7 @@ export class DataConsistencyChecker {
 
       fixed.push({
         type: 'rating_calculations',
-        count: ratingFixes.rowCount || 0
+        count: (ratingFixes as any).rowCount || 0
       });
 
       // Fix booking counts
@@ -518,7 +519,7 @@ export class DataConsistencyChecker {
 
       fixed.push({
         type: 'booking_counts',
-        count: bookingCountFixes.rowCount || 0
+        count: (bookingCountFixes as any).rowCount || 0
       });
 
     } catch (error) {
@@ -691,7 +692,7 @@ export class PaymentReconciliation {
         AND b.booking_date BETWEEN ${startDate} AND ${endDate}
     `);
 
-    for (const row of bookingsWithTransactions.rows) {
+    for (const row of bookingsWithTransactions) {
       const record = row as any;
       
       if (!record.transaction_amount) {
@@ -811,7 +812,7 @@ export class RatingAggregation {
         `;
 
       const result = await db.execute(updateQuery);
-      updated = result.rowCount || 0;
+      updated = (result as any).rowCount || 0;
 
     } catch (error) {
       errors.push(`Rating update failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -822,8 +823,4 @@ export class RatingAggregation {
 }
 
 // Export all validation utilities
-export {
-  BookingValidationSchema,
-  ProviderValidationSchema,
-  AvailabilityValidationSchema
-};
+// Note: Schemas are already exported where they're defined

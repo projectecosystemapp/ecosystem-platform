@@ -4,6 +4,7 @@ import { db } from "@/db/db";
 import { providersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import Stripe from "stripe";
+import { withRateLimit } from "@/lib/rate-limit";
 
 // Stripe webhook endpoint secret for Connect events
 const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET!;
@@ -11,8 +12,9 @@ const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET!;
 /**
  * POST /api/stripe/webhooks/connect
  * Handle Stripe Connect webhook events
+ * Rate limited: 100 requests per minute from Stripe IPs
  */
-export async function POST(request: NextRequest) {
+export const POST = withRateLimit('webhook', async (request: NextRequest) => {
   try {
     const body = await request.text();
     const signature = request.headers.get("stripe-signature");
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * Handle account.updated events

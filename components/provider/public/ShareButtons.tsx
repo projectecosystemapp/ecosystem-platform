@@ -110,7 +110,7 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Native Share Button (if supported) */}
-        {typeof window !== "undefined" && navigator.share && (
+        {typeof window !== "undefined" && "share" in navigator && (
           <Button
             variant="outline"
             className="w-full justify-start"

@@ -6,6 +6,7 @@ import { db } from "@/db/db";
 import { providersTable } from "@/db/schema/providers-schema";
 import { bookingStatus, type NewBooking } from "@/db/schema/bookings-schema";
 import { eq } from "drizzle-orm";
+import { withRateLimit } from "@/lib/rate-limit";
 
 // Validation schema for creating a booking
 const createBookingSchema = z.object({
@@ -22,7 +23,12 @@ const createBookingSchema = z.object({
   guestPhone: z.string().optional(),
 });
 
-export async function POST(request: NextRequest) {
+/**
+ * POST /api/bookings/create
+ * Create a new booking
+ * Rate limited: 10 requests per minute per user/IP
+ */
+export const POST = withRateLimit('booking', async (request: NextRequest) => {
   try {
     const { userId } = auth();
     const body = await request.json();
@@ -160,4 +166,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

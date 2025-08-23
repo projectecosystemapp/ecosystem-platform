@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 export default function StripeSetupStep() {
-  const { stripeStatus, updateStripeStatus } = useProviderOnboardingStore();
+  const { paymentInfo, updatePaymentInfo } = useProviderOnboardingStore();
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,17 +43,9 @@ export default function StripeSetupStep() {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Simulated success
-      updateStripeStatus({
-        accountId: "acct_mock_" + Date.now(),
-        onboardingComplete: true,
-        detailsSubmitted: true,
-        chargesEnabled: true,
-        payoutsEnabled: true,
-        requirements: {
-          currentlyDue: [],
-          eventuallyDue: [],
-          pastDue: [],
-        },
+      updatePaymentInfo({
+        stripeConnectAccountId: "acct_mock_" + Date.now(),
+        stripeOnboardingComplete: true,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to connect Stripe account");
@@ -62,9 +54,7 @@ export default function StripeSetupStep() {
     }
   };
 
-  const isConnected = stripeStatus.onboardingComplete && 
-                      stripeStatus.chargesEnabled && 
-                      stripeStatus.payoutsEnabled;
+  const isConnected = paymentInfo.stripeOnboardingComplete === true;
 
   return (
     <div className="space-y-6">
@@ -92,46 +82,17 @@ export default function StripeSetupStep() {
           <div className="space-y-3">
             <StatusItem
               label="Account Created"
-              status={!!stripeStatus.accountId}
-              loading={isConnecting && !stripeStatus.accountId}
+              status={!!paymentInfo.stripeConnectAccountId}
+              loading={isConnecting && !paymentInfo.stripeConnectAccountId}
             />
             <StatusItem
-              label="Details Submitted"
-              status={stripeStatus.detailsSubmitted}
-              loading={isConnecting && stripeStatus.accountId && !stripeStatus.detailsSubmitted}
-            />
-            <StatusItem
-              label="Charges Enabled"
-              status={stripeStatus.chargesEnabled}
-              loading={isConnecting && stripeStatus.detailsSubmitted && !stripeStatus.chargesEnabled}
-            />
-            <StatusItem
-              label="Payouts Enabled"
-              status={stripeStatus.payoutsEnabled}
-              loading={isConnecting && stripeStatus.detailsSubmitted && !stripeStatus.payoutsEnabled}
+              label="Onboarding Complete"
+              status={paymentInfo.stripeOnboardingComplete === true}
+              loading={isConnecting && !!paymentInfo.stripeConnectAccountId && !paymentInfo.stripeOnboardingComplete}
             />
           </div>
 
-          {/* Requirements */}
-          {stripeStatus.requirements && (
-            stripeStatus.requirements.currentlyDue.length > 0 ||
-            stripeStatus.requirements.pastDue.length > 0
-          ) && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Action Required:</strong> Please complete the following requirements in Stripe:
-                <ul className="list-disc list-inside mt-2">
-                  {stripeStatus.requirements.pastDue.map((req) => (
-                    <li key={req} className="text-sm">{req} (Past Due)</li>
-                  ))}
-                  {stripeStatus.requirements.currentlyDue.map((req) => (
-                    <li key={req} className="text-sm">{req}</li>
-                  ))}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
+          {/* Requirements - will be populated when integrated with real Stripe API */}
 
           {/* Error Message */}
           {error && (

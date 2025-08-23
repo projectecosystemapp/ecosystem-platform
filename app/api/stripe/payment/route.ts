@@ -6,6 +6,7 @@ import { bookingsTable, transactionsTable, providersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import Stripe from "stripe";
+import { withRateLimit } from "@/lib/rate-limit";
 
 // Platform fee configuration
 const PLATFORM_FEE_PERCENT = Number(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT) || 10; // 10% base fee
@@ -68,8 +69,9 @@ function calculateFees(serviceAmount: number, isGuest: boolean) {
 /**
  * POST /api/stripe/payment
  * Create a payment intent with platform fees
+ * Rate limited: 5 requests per minute per IP/user
  */
-export async function POST(request: NextRequest) {
+export const POST = withRateLimit('payment', async (request: NextRequest) => {
   try {
     const { userId } = await auth();
     const body = await request.json();
@@ -233,13 +235,14 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * PUT /api/stripe/payment
  * Confirm a payment and update booking status
+ * Rate limited: 10 requests per minute per IP/user
  */
-export async function PUT(request: NextRequest) {
+export const PUT = withRateLimit('booking', async (request: NextRequest) => {
   try {
     const { userId } = await auth();
     const body = await request.json();
@@ -323,13 +326,14 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * DELETE /api/stripe/payment
  * Refund a payment
+ * Rate limited: 5 requests per minute per IP/user
  */
-export async function DELETE(request: NextRequest) {
+export const DELETE = withRateLimit('payment', async (request: NextRequest) => {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -461,4 +465,4 @@ export async function DELETE(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

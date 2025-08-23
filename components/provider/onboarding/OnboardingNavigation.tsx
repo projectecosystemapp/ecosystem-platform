@@ -42,7 +42,6 @@ import {
   useProviderOnboardingStore,
   OnboardingStep,
   useStepNavigation,
-  useCurrentStepValidation,
   useCanSubmitForm,
 } from "@/lib/stores/provider-onboarding-store";
 import { cn } from "@/lib/utils";
@@ -68,9 +67,9 @@ export default function OnboardingNavigation({
     validateStep,
     goToNextStep,
     goToPreviousStep,
+    stepValidation,
   } = useProviderOnboardingStore();
 
-  const currentStepValidation = useCurrentStepValidation();
   const canSubmit = useCanSubmitForm();
 
   const isLastStep = currentStep === OnboardingStep.REVIEW;
@@ -82,7 +81,8 @@ export default function OnboardingNavigation({
     
     if (!isValid) {
       // Show specific error messages based on validation errors
-      const errors = currentStepValidation.errors;
+      const currentStepValidation = stepValidation[currentStep];
+      const errors = currentStepValidation?.errors || {};
       const errorMessages = Object.values(errors).filter((msg): msg is string => typeof msg === 'string');
       
       if (errorMessages.length > 0) {
@@ -281,11 +281,11 @@ export default function OnboardingNavigation({
       </nav>
 
       {/* Validation Status (Screen Reader Only) */}
-      {currentStepValidation && !currentStepValidation.isValid && (
+      {stepValidation[currentStep] && !stepValidation[currentStep].isValid && (
         <div className="sr-only" role="alert">
           <p>
             This step has validation errors. 
-            {Object.values(currentStepValidation.errors).join(". ")}
+            {Object.values(stepValidation[currentStep].errors).join(". ")}
           </p>
         </div>
       )}

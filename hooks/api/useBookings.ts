@@ -152,8 +152,8 @@ export function useBookings(params: BookingListParams = {}) {
       const searchParams = new URLSearchParams();
       
       Object.entries({ ...params, ...queryParams }).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          searchParams.set(key, value.toString());
+        if (value !== undefined && value !== null && String(value) !== "") {
+          searchParams.set(key, String(value));
         }
       });
 
@@ -191,8 +191,8 @@ export function useBookings(params: BookingListParams = {}) {
       const searchParams = new URLSearchParams();
       
       Object.entries({ ...params, page: nextPage }).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          searchParams.set(key, value.toString());
+        if (value !== undefined && value !== null && String(value) !== "") {
+          searchParams.set(key, String(value));
         }
       });
 

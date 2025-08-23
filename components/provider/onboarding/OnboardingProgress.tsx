@@ -62,7 +62,8 @@ export default function OnboardingProgress({
   onStepClick,
 }: OnboardingProgressProps) {
   const { completedSteps } = useProviderOnboardingStore();
-  const progressPercentage = useOnboardingProgress();
+  const calculateProgress = useOnboardingProgress();
+  const progressPercentage = calculateProgress();
 
   // Check if user can navigate to a step
   const canNavigateToStep = (step: OnboardingStep) => {

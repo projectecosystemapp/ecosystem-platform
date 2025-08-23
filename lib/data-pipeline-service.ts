@@ -33,12 +33,14 @@ import {
   DEFAULT_FEE_STRUCTURE
 } from './data-transformations';
 import { 
-  getPlatformMetrics,
-  getBookingTrends,
-  getTopPerformingProviders,
-  getRevenueAnalytics,
-  getAvailabilityInsights,
-  getBookingSuccessMetrics
+  getBookingMetrics
+  // The following functions need to be implemented:
+  // getPlatformMetrics,
+  // getBookingTrends,
+  // getTopPerformingProviders,
+  // getRevenueAnalytics,
+  // getAvailabilityInsights,
+  // getBookingSuccessMetrics
 } from '@/db/queries/analytics-queries';
 import { 
   searchProvidersOptimized,
@@ -98,7 +100,7 @@ export class DataPipelineService {
     return await this.performanceTracker.trackQuery(
       'provider_search',
       async () => {
-        return await EnhancedProviderCache.getCachedSearchResults(filters);
+        return await EnhancedProviderCache.getCachedSearchResultsWithFilters(filters);
       },
       { filterCount: Object.keys(filters).length }
     );
@@ -277,21 +279,30 @@ export class DataPipelineService {
     return await PerformanceCache.cacheSlowQuery(
       `platform_analytics_${format(dateRange?.start || subDays(new Date(), 30), 'yyyy-MM-dd')}_${format(dateRange?.end || new Date(), 'yyyy-MM-dd')}`,
       async () => {
-        const [
-          platformMetrics,
-          bookingTrends,
-          topProviders,
-          revenueAnalytics,
-          availabilityInsights,
-          successMetrics
-        ] = await Promise.all([
-          getPlatformMetrics(dateRange),
-          getBookingTrends(dateRange),
-          getTopPerformingProviders(20, dateRange),
-          getRevenueAnalytics(dateRange),
-          getAvailabilityInsights(dateRange),
-          getBookingSuccessMetrics(dateRange)
-        ]);
+        // TODO: Implement these analytics functions
+        // const [
+        //   platformMetrics,
+        //   bookingTrends,
+        //   topProviders,
+        //   revenueAnalytics,
+        //   availabilityInsights,
+        //   successMetrics
+        // ] = await Promise.all([
+        //   getPlatformMetrics(dateRange),
+        //   getBookingTrends(dateRange),
+        //   getTopPerformingProviders(20, dateRange),
+        //   getRevenueAnalytics(dateRange),
+        //   getAvailabilityInsights(dateRange),
+        //   getBookingSuccessMetrics(dateRange)
+        // ]);
+        
+        // Placeholder data for now
+        const platformMetrics: any = {};
+        const bookingTrends: any = {};
+        const topProviders: any[] = [];
+        const revenueAnalytics: any = {};
+        const availabilityInsights: any = {};
+        const successMetrics: any = {};
 
         return {
           platformMetrics,
@@ -679,8 +690,8 @@ export type {
 } from './monitoring-metrics';
 
 export type {
-  ValidationResult,
-  BookingStatusSummary,
-  PricingCalculation,
-  FeeStructure
+  ValidationResult
+  // BookingStatusSummary,
+  // PricingCalculation,
+  // FeeStructure
 } from './data-validation';

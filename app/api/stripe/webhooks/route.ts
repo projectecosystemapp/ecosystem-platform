@@ -1,10 +1,11 @@
 import { manageSubscriptionStatusChange, updateStripeCustomer } from "@/actions/stripe-actions";
 import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
 import { db } from "@/db/db";
-import { bookingsTable, transactionsTable } from "@/db/schema";
+import { bookingsTable, transactionsTable, webhookEventsTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const relevantEvents = new Set([
@@ -26,7 +27,12 @@ const relevantEvents = new Set([
 // Default usage credits for Pro plan
 const DEFAULT_USAGE_CREDITS = 250;
 
-export async function POST(req: Request) {
+/**
+ * POST /api/stripe/webhooks
+ * Handle Stripe webhook events
+ * Note: Rate limiting should be applied at middleware level for webhooks
+ */
+export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = headers().get("Stripe-Signature") as string;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -40,48 +46,78 @@ export async function POST(req: Request) {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err: any) {
     console.error(`Webhook Error: ${err.message}`);
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 
-  if (relevantEvents.has(event.type)) {
-    try {
-      switch (event.type) {
+  // IDEMPOTENCY CHECK: Check if we've already processed this event
+  try {
+    const existingEvent = await db
+      .select()
+      .from(webhookEventsTable)
+      .where(eq(webhookEventsTable.eventId, event.id))
+      .limit(1);
+
+    if (existingEvent.length > 0) {
+      console.log(`Webhook event ${event.id} already processed, skipping`);
+      return NextResponse.json({ received: true });
+    }
+  } catch (error) {
+    console.error(`Error checking for duplicate webhook event: ${error}`);
+    // Continue processing even if duplicate check fails to avoid losing events
+  }
+
+  // Store the webhook event for idempotency and audit
+  try {
+    await db.transaction(async (tx) => {
+      // Insert the webhook event record
+      await tx.insert(webhookEventsTable).values({
+        eventId: event.id,
+        eventType: event.type,
+        status: "processing",
+        payload: event as any, // Store the entire event for audit purposes
+        createdAt: new Date(),
+      });
+
+      // Process the webhook if it's a relevant event
+      if (relevantEvents.has(event.type)) {
+        try {
+          switch (event.type) {
         case "customer.subscription.updated":
         case "customer.subscription.deleted":
-          await handleSubscriptionChange(event);
+          await handleSubscriptionChange(event, tx);
           break;
 
         case "checkout.session.completed":
-          await handleCheckoutSession(event);
+          await handleCheckoutSession(event, tx);
           break;
           
         case "invoice.payment_succeeded":
-          await handlePaymentSuccess(event);
+          await handlePaymentSuccess(event, tx);
           break;
           
         case "invoice.payment_failed":
-          await handlePaymentFailed(event);
+          await handlePaymentFailed(event, tx);
           break;
 
         // Booking payment events
         case "payment_intent.succeeded":
-          await handleBookingPaymentSuccess(event);
+          await handleBookingPaymentSuccess(event, tx);
           break;
 
         case "payment_intent.payment_failed":
-          await handleBookingPaymentFailure(event);
+          await handleBookingPaymentFailure(event, tx);
           break;
 
         case "payment_intent.canceled":
-          await handleBookingPaymentCancellation(event);
+          await handleBookingPaymentCancellation(event, tx);
           break;
 
         case "charge.dispute.created":
-          await handleBookingChargeDispute(event);
+          await handleBookingChargeDispute(event, tx);
           break;
 
         case "transfer.created":
-          await handleBookingTransferCreated(event);
+          await handleBookingTransferCreated(event, tx);
           break;
 
         // These event types don't exist in Stripe's type definitions
@@ -93,27 +129,60 @@ export async function POST(req: Request) {
         //   await handleBookingTransferFailed(event);
         //   break;
 
-        default:
-          throw new Error("Unhandled relevant event!");
-      }
-    } catch (error) {
-      console.error("Webhook handler failed:", error);
-      return new Response("Webhook handler failed. View your nextjs function logs.", {
-        status: 400
-      });
-    }
-  }
+            default:
+              throw new Error("Unhandled relevant event!");
+          }
 
-  return new Response(JSON.stringify({ received: true }));
+          // Mark the event as completed successfully
+          await tx
+            .update(webhookEventsTable)
+            .set({
+              status: "completed",
+              processedAt: new Date(),
+            })
+            .where(eq(webhookEventsTable.eventId, event.id));
+
+        } catch (error) {
+          // Mark the event as failed
+          await tx
+            .update(webhookEventsTable)
+            .set({
+              status: "failed",
+              errorMessage: error instanceof Error ? error.message : "Unknown error",
+              processedAt: new Date(),
+            })
+            .where(eq(webhookEventsTable.eventId, event.id));
+
+          throw error; // Re-throw to rollback transaction
+        }
+      } else {
+        // For non-relevant events, just mark as completed
+        await tx
+          .update(webhookEventsTable)
+          .set({
+            status: "completed",
+            processedAt: new Date(),
+          })
+          .where(eq(webhookEventsTable.eventId, event.id));
+      }
+    });
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error("Webhook processing failed:", error);
+    return NextResponse.json({ error: "Webhook handler failed. View your nextjs function logs." }, {
+      status: 400
+    });
+  }
 }
 
-async function handleSubscriptionChange(event: Stripe.Event) {
+async function handleSubscriptionChange(event: Stripe.Event, tx?: any) {
   const subscription = event.data.object as Stripe.Subscription;
   const productId = subscription.items.data[0].price.product as string;
   await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId);
 }
 
-async function handleCheckoutSession(event: Stripe.Event) {
+async function handleCheckoutSession(event: Stripe.Event, tx?: any) {
   const checkoutSession = event.data.object as Stripe.Checkout.Session;
   if (checkoutSession.mode === "subscription") {
     const subscriptionId = checkoutSession.subscription as string;
@@ -148,7 +217,7 @@ async function handleCheckoutSession(event: Stripe.Event) {
   }
 }
 
-async function handlePaymentSuccess(event: Stripe.Event) {
+async function handlePaymentSuccess(event: Stripe.Event, tx?: any) {
   const invoice = event.data.object as Stripe.Invoice;
   const customerId = invoice.customer as string;
   
@@ -177,7 +246,7 @@ async function handlePaymentSuccess(event: Stripe.Event) {
   }
 }
 
-async function handlePaymentFailed(event: Stripe.Event) {
+async function handlePaymentFailed(event: Stripe.Event, tx?: any) {
   const invoice = event.data.object as Stripe.Invoice;
   const customerId = invoice.customer as string;
   
@@ -202,7 +271,7 @@ async function handlePaymentFailed(event: Stripe.Event) {
 /**
  * Handle successful booking payment confirmation
  */
-async function handleBookingPaymentSuccess(event: Stripe.Event) {
+async function handleBookingPaymentSuccess(event: Stripe.Event, tx?: any) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
   const bookingId = paymentIntent.metadata?.bookingId;
 
@@ -211,9 +280,11 @@ async function handleBookingPaymentSuccess(event: Stripe.Event) {
     return;
   }
 
+  const database = tx || db;
+  
   try {
     // Update booking status to confirmed
-    const [updatedBooking] = await db
+    const [updatedBooking] = await database
       .update(bookingsTable)
       .set({
         status: "confirmed",
@@ -228,7 +299,7 @@ async function handleBookingPaymentSuccess(event: Stripe.Event) {
     }
 
     // Update transaction status
-    await db
+    await database
       .update(transactionsTable)
       .set({
         status: "completed",
@@ -251,7 +322,7 @@ async function handleBookingPaymentSuccess(event: Stripe.Event) {
 /**
  * Handle booking payment failure
  */
-async function handleBookingPaymentFailure(event: Stripe.Event) {
+async function handleBookingPaymentFailure(event: Stripe.Event, tx?: any) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
   const bookingId = paymentIntent.metadata?.bookingId;
 
@@ -259,9 +330,11 @@ async function handleBookingPaymentFailure(event: Stripe.Event) {
     return;
   }
 
+  const database = tx || db;
+
   try {
     // Update booking status to cancelled due to payment failure
-    await db
+    await database
       .update(bookingsTable)
       .set({
         status: "cancelled",
@@ -272,7 +345,7 @@ async function handleBookingPaymentFailure(event: Stripe.Event) {
       .where(eq(bookingsTable.id, bookingId));
 
     // Update transaction status
-    await db
+    await database
       .update(transactionsTable)
       .set({
         status: "failed",
@@ -293,7 +366,7 @@ async function handleBookingPaymentFailure(event: Stripe.Event) {
 /**
  * Handle booking payment cancellation
  */
-async function handleBookingPaymentCancellation(event: Stripe.Event) {
+async function handleBookingPaymentCancellation(event: Stripe.Event, tx?: any) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
   const bookingId = paymentIntent.metadata?.bookingId;
 
@@ -301,9 +374,11 @@ async function handleBookingPaymentCancellation(event: Stripe.Event) {
     return;
   }
 
+  const database = tx || db;
+
   try {
     // Update booking status to cancelled
-    await db
+    await database
       .update(bookingsTable)
       .set({
         status: "cancelled",
@@ -314,7 +389,7 @@ async function handleBookingPaymentCancellation(event: Stripe.Event) {
       .where(eq(bookingsTable.id, bookingId));
 
     // Update transaction status
-    await db
+    await database
       .update(transactionsTable)
       .set({
         status: "failed",
@@ -332,13 +407,15 @@ async function handleBookingPaymentCancellation(event: Stripe.Event) {
 /**
  * Handle charge dispute (chargeback)
  */
-async function handleBookingChargeDispute(event: Stripe.Event) {
+async function handleBookingChargeDispute(event: Stripe.Event, tx?: any) {
   const dispute = event.data.object as Stripe.Dispute;
   const chargeId = dispute.charge as string;
 
+  const database = tx || db;
+
   try {
     // Find the booking associated with this charge
-    const transaction = await db
+    const transaction = await database
       .select({
         bookingId: transactionsTable.bookingId
       })
@@ -354,7 +431,7 @@ async function handleBookingChargeDispute(event: Stripe.Event) {
     const bookingId = transaction[0].bookingId;
 
     // Update booking with dispute information
-    await db
+    await database
       .update(bookingsTable)
       .set({
         status: "cancelled",
@@ -378,7 +455,7 @@ async function handleBookingChargeDispute(event: Stripe.Event) {
 /**
  * Handle transfer creation (payout to provider)
  */
-async function handleBookingTransferCreated(event: Stripe.Event) {
+async function handleBookingTransferCreated(event: Stripe.Event, tx?: any) {
   const transfer = event.data.object as Stripe.Transfer;
   const bookingId = transfer.metadata?.bookingId;
 
@@ -386,9 +463,11 @@ async function handleBookingTransferCreated(event: Stripe.Event) {
     return;
   }
 
+  const database = tx || db;
+
   try {
     // Update transaction with transfer ID
-    await db
+    await database
       .update(transactionsTable)
       .set({
         stripeTransferId: transfer.id
@@ -405,7 +484,7 @@ async function handleBookingTransferCreated(event: Stripe.Event) {
 /**
  * Handle successful transfer (payout completed)
  */
-async function handleBookingTransferPaid(event: Stripe.Event) {
+async function handleBookingTransferPaid(event: Stripe.Event, tx?: any) {
   const transfer = event.data.object as Stripe.Transfer;
   const bookingId = transfer.metadata?.bookingId;
 
@@ -413,9 +492,11 @@ async function handleBookingTransferPaid(event: Stripe.Event) {
     return;
   }
 
+  const database = tx || db;
+
   try {
     // Update transaction status
-    await db
+    await database
       .update(transactionsTable)
       .set({
         status: "completed",
@@ -435,7 +516,7 @@ async function handleBookingTransferPaid(event: Stripe.Event) {
 /**
  * Handle failed transfer (payout failed)
  */
-async function handleBookingTransferFailed(event: Stripe.Event) {
+async function handleBookingTransferFailed(event: Stripe.Event, tx?: any) {
   const transfer = event.data.object as Stripe.Transfer;
   const bookingId = transfer.metadata?.bookingId;
 
@@ -443,9 +524,11 @@ async function handleBookingTransferFailed(event: Stripe.Event) {
     return;
   }
 
+  const database = tx || db;
+
   try {
     // Update transaction status
-    await db
+    await database
       .update(transactionsTable)
       .set({
         status: "failed",

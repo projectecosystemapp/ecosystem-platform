@@ -11,7 +11,7 @@ import { bookingsTable } from "@/db/schema/bookings-schema";
 import { eq, and, gte, lte, or, sql, between } from "drizzle-orm";
 import { z } from "zod";
 import { format, parse, addMinutes, startOfDay, endOfDay, isAfter, isBefore, parseISO, addDays } from "date-fns";
-import { zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 // Validation schemas
 export const weeklyScheduleSchema = z.object({

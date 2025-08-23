@@ -8,8 +8,8 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { headers } from "next/headers";
-import { createHash } from "crypto";
+import { headers, cookies } from "next/headers";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 
 // Rate limiting storage (in production, use Redis)
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
@@ -141,6 +141,8 @@ export async function withSecureAction<T, R>(
     input?: T;
     schema?: z.ZodSchema<T>;
     requireAuth?: boolean;
+    requireCSRF?: boolean; // New option for CSRF protection
+    csrfToken?: string; // Token provided by client
     rateLimit?: { limit: number; window: number };
     auditEvent?: SecurityEvent;
     resourceType?: string;
@@ -167,7 +169,36 @@ export async function withSecureAction<T, R>(
       return { success: false, error: "Unauthorized: Please sign in" };
     }
     
-    // 2. Rate limiting
+    // 2. CSRF Protection for state-changing operations
+    // Default to requiring CSRF for authenticated state-changing actions
+    const shouldCheckCSRF = options.requireCSRF !== false && 
+                           options.requireAuth !== false;
+    
+    if (shouldCheckCSRF) {
+      const csrfValidation = await validateCSRFToken(options.csrfToken);
+      
+      if (!csrfValidation.valid) {
+        auditLog({
+          userId,
+          event: SecurityEvent.SUSPICIOUS_ACTIVITY,
+          action: options.actionName,
+          ipAddress,
+          userAgent,
+          success: false,
+          details: { 
+            reason: "CSRF validation failed",
+            error: csrfValidation.error 
+          },
+        });
+        
+        return {
+          success: false,
+          error: csrfValidation.error || "CSRF validation failed",
+        };
+      }
+    }
+    
+    // 3. Rate limiting
     if (options.rateLimit && userId) {
       const rateLimitResult = await checkRateLimit(
         userId,
@@ -195,7 +226,7 @@ export async function withSecureAction<T, R>(
       }
     }
     
-    // 3. Input validation
+    // 4. Input validation
     let validatedData = options.input;
     if (options.schema && options.input) {
       try {
@@ -223,10 +254,10 @@ export async function withSecureAction<T, R>(
       }
     }
     
-    // 4. Execute the action
+    // 5. Execute the action
     const result = await action(userId!, validatedData as T);
     
-    // 5. Audit successful action
+    // 6. Audit successful action
     if (options.auditEvent) {
       auditLog({
         userId,
@@ -245,7 +276,7 @@ export async function withSecureAction<T, R>(
     
     return { success: true, data: result };
   } catch (error) {
-    // 6. Error handling and logging
+    // 7. Error handling and logging
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     
     const { userId, ipAddress, userAgent } = await authenticateRequest();
@@ -318,13 +349,235 @@ export async function checkResourcePermission(
 }
 
 /**
- * CSRF token validation for state-changing operations
+ * CSRF Configuration
  */
-export async function validateCSRFToken(token: string): Promise<boolean> {
-  // In production, implement proper CSRF token validation
-  // For now, return true but log the check
-  console.log("[SECURITY] CSRF token validation performed");
-  return true;
+const CSRF_TOKEN_LENGTH = 32;
+const CSRF_SECRET = process.env.CSRF_SECRET || (() => {
+  console.error("[SECURITY] CSRF_SECRET not set in environment variables!");
+  throw new Error("CSRF_SECRET must be set in production");
+})();
+const CSRF_COOKIE_NAME = "__Host-csrf-token";
+const CSRF_TOKEN_MAX_AGE = 86400000; // 24 hours in milliseconds
+
+/**
+ * Generate a cryptographically secure CSRF token
+ */
+export function generateCSRFToken(): string {
+  return randomBytes(CSRF_TOKEN_LENGTH).toString("hex");
+}
+
+/**
+ * Create a signed CSRF token with timestamp
+ */
+export function createSignedCSRFToken(token: string): string {
+  const timestamp = Date.now();
+  const data = `${token}.${timestamp}`;
+  const signature = createHash("sha256")
+    .update(`${CSRF_SECRET}.${data}`)
+    .digest("hex");
+  return `${data}.${signature}`;
+}
+
+/**
+ * Verify a signed CSRF token using timing-safe comparison
+ */
+export function verifySignedCSRFToken(
+  signedToken: string,
+  maxAge: number = CSRF_TOKEN_MAX_AGE
+): { valid: boolean; reason?: string } {
+  try {
+    const parts = signedToken.split(".");
+    if (parts.length !== 3) {
+      return { valid: false, reason: "Invalid token format" };
+    }
+
+    const [token, timestamp, providedSignature] = parts;
+    const data = `${token}.${timestamp}`;
+
+    // Verify signature using timing-safe comparison
+    const expectedSignature = createHash("sha256")
+      .update(`${CSRF_SECRET}.${data}`)
+      .digest("hex");
+
+    const expectedBuffer = Buffer.from(expectedSignature, "hex");
+    const providedBuffer = Buffer.from(providedSignature, "hex");
+
+    if (expectedBuffer.length !== providedBuffer.length) {
+      return { valid: false, reason: "Invalid signature length" };
+    }
+
+    if (!timingSafeEqual(expectedBuffer, providedBuffer)) {
+      return { valid: false, reason: "Invalid signature" };
+    }
+
+    // Check token age
+    const tokenAge = Date.now() - parseInt(timestamp, 10);
+    if (tokenAge > maxAge) {
+      return { valid: false, reason: "Token expired" };
+    }
+
+    if (tokenAge < 0) {
+      return { valid: false, reason: "Token timestamp invalid" };
+    }
+
+    return { valid: true };
+  } catch (error) {
+    console.error("[SECURITY] CSRF token verification error:", error);
+    return { valid: false, reason: "Token verification failed" };
+  }
+}
+
+/**
+ * CSRF token validation for state-changing operations
+ * Validates tokens from both cookies and headers/body
+ */
+export async function validateCSRFToken(
+  providedToken?: string | null
+): Promise<{ valid: boolean; error?: string }> {
+  try {
+    // Get the session token from HTTP-only cookie
+    const cookieStore = await cookies();
+    const cookieToken = cookieStore.get(CSRF_COOKIE_NAME);
+
+    if (!cookieToken?.value) {
+      auditLog({
+        userId: null,
+        event: SecurityEvent.SUSPICIOUS_ACTIVITY,
+        action: "csrf_validation",
+        success: false,
+        details: { error: "No CSRF cookie present" },
+      });
+      return { valid: false, error: "CSRF protection: No session token" };
+    }
+
+    // If no token provided in request, check headers
+    if (!providedToken) {
+      const headersList = await headers();
+      providedToken = headersList.get("x-csrf-token") || 
+                     headersList.get("csrf-token");
+    }
+
+    if (!providedToken) {
+      auditLog({
+        userId: null,
+        event: SecurityEvent.SUSPICIOUS_ACTIVITY,
+        action: "csrf_validation",
+        success: false,
+        details: { error: "No CSRF token in request" },
+      });
+      return { valid: false, error: "CSRF protection: No request token" };
+    }
+
+    // Verify both tokens match and are valid
+    const cookieVerification = verifySignedCSRFToken(cookieToken.value);
+    if (!cookieVerification.valid) {
+      auditLog({
+        userId: null,
+        event: SecurityEvent.SUSPICIOUS_ACTIVITY,
+        action: "csrf_validation",
+        success: false,
+        details: { 
+          error: "Invalid cookie token",
+          reason: cookieVerification.reason 
+        },
+      });
+      return { 
+        valid: false, 
+        error: `CSRF protection: Invalid session token - ${cookieVerification.reason}` 
+      };
+    }
+
+    const requestVerification = verifySignedCSRFToken(providedToken);
+    if (!requestVerification.valid) {
+      auditLog({
+        userId: null,
+        event: SecurityEvent.SUSPICIOUS_ACTIVITY,
+        action: "csrf_validation",
+        success: false,
+        details: { 
+          error: "Invalid request token",
+          reason: requestVerification.reason 
+        },
+      });
+      return { 
+        valid: false, 
+        error: `CSRF protection: Invalid request token - ${requestVerification.reason}` 
+      };
+    }
+
+    // Extract the actual tokens from signed tokens for comparison
+    const cookieTokenValue = cookieToken.value.split(".")[0];
+    const requestTokenValue = providedToken.split(".")[0];
+
+    // Use timing-safe comparison for the tokens
+    const cookieBuffer = Buffer.from(cookieTokenValue);
+    const requestBuffer = Buffer.from(requestTokenValue);
+
+    if (cookieBuffer.length !== requestBuffer.length) {
+      auditLog({
+        userId: null,
+        event: SecurityEvent.SUSPICIOUS_ACTIVITY,
+        action: "csrf_validation",
+        success: false,
+        details: { error: "Token length mismatch" },
+      });
+      return { valid: false, error: "CSRF protection: Token mismatch" };
+    }
+
+    if (!timingSafeEqual(cookieBuffer, requestBuffer)) {
+      auditLog({
+        userId: null,
+        event: SecurityEvent.SUSPICIOUS_ACTIVITY,
+        action: "csrf_validation",
+        success: false,
+        details: { error: "Tokens do not match" },
+      });
+      return { valid: false, error: "CSRF protection: Token mismatch" };
+    }
+
+    // Tokens are valid and match
+    return { valid: true };
+  } catch (error) {
+    console.error("[SECURITY] CSRF validation error:", error);
+    auditLog({
+      userId: null,
+      event: SecurityEvent.SUSPICIOUS_ACTIVITY,
+      action: "csrf_validation",
+      success: false,
+      details: { 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      },
+    });
+    return { 
+      valid: false, 
+      error: "CSRF protection: Validation error" 
+    };
+  }
+}
+
+/**
+ * Set CSRF token cookie for the response
+ */
+export async function setCSRFTokenCookie(): Promise<string> {
+  const token = generateCSRFToken();
+  const signedToken = createSignedCSRFToken(token);
+  
+  const cookieStore = await cookies();
+  cookieStore.set({
+    name: CSRF_COOKIE_NAME,
+    value: signedToken,
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 86400, // 24 hours
+    // Use __Host- prefix for additional security in production
+    ...(process.env.NODE_ENV === "production" && {
+      name: "__Host-csrf-token",
+    }),
+  });
+
+  return signedToken;
 }
 
 /**
