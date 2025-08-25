@@ -25,6 +25,10 @@ export const providersTable = pgTable("providers", {
   locationState: text("location_state"),
   locationZipCode: text("location_zip_code"),
   locationCountry: text("location_country").default("US"),
+  fullAddress: text("full_address"),
+  latitude: numeric("latitude", { precision: 10, scale: 7 }),
+  longitude: numeric("longitude", { precision: 10, scale: 7 }),
+  geocodedAt: timestamp("geocoded_at"),
   
   // Pricing
   hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }),

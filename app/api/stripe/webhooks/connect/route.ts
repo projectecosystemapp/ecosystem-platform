@@ -5,6 +5,7 @@ import { providersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { withRateLimit } from "@/lib/rate-limit";
+import { processWebhookWithIdempotency } from "@/lib/webhook-idempotency";
 
 // Stripe webhook endpoint secret for Connect events
 const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET!;
@@ -38,72 +39,79 @@ export const POST = withRateLimit('webhook', async (request: NextRequest) => {
       );
     }
 
-    // Handle different event types
-    switch (event.type) {
-      case "account.updated": {
-        const account = event.data.object as Stripe.Account;
-        await handleAccountUpdated(account);
-        break;
-      }
+    // Process the webhook with idempotency guarantees
+    const result = await processWebhookWithIdempotency(event, async (event, tx) => {
+      switch (event.type) {
+        case "account.updated": {
+          const account = event.data.object as Stripe.Account;
+          await handleAccountUpdated(account, tx);
+          break;
+        }
 
-      case "account.application.authorized": {
-        // For application events, we need to get the account ID differently
-        const application = event.data.object as any; // Stripe.Application
-        // TODO: Handle application authorized event
-        console.log("Application authorized:", application);
-        break;
-      }
+        case "account.application.authorized": {
+          const account = event.data.object as Stripe.Account;
+          await handleAccountAuthorized(account, tx);
+          break;
+        }
 
-      case "account.application.deauthorized": {
-        // For application events, we need to get the account ID differently
-        const application = event.data.object as any; // Stripe.Application
-        // TODO: Handle application deauthorized event
-        console.log("Application deauthorized:", application);
-        break;
-      }
+        case "account.application.deauthorized": {
+          const account = event.data.object as Stripe.Account;
+          await handleAccountDeauthorized(account, tx);
+          break;
+        }
 
-      case "capability.updated": {
-        const capability = event.data.object as Stripe.Capability;
-        await handleCapabilityUpdated(capability);
-        break;
-      }
+        case "capability.updated": {
+          const capability = event.data.object as Stripe.Capability;
+          await handleCapabilityUpdated(capability, tx);
+          break;
+        }
 
-      case "account.external_account.created":
-      case "account.external_account.updated": {
-        const externalAccount = event.data.object as Stripe.BankAccount | Stripe.Card;
-        console.log(`External account event for account: ${event.account}`);
-        // Log for monitoring but no action needed
-        break;
-      }
+        case "account.external_account.created":
+        case "account.external_account.updated": {
+          const externalAccount = event.data.object as Stripe.BankAccount | Stripe.Card;
+          console.log(`External account event for account: ${event.account}`);
+          // Log for monitoring but no action needed
+          break;
+        }
 
-      case "person.created":
-      case "person.updated":
-      case "person.deleted": {
-        const person = event.data.object as Stripe.Person;
-        console.log(`Person event for account: ${event.account}`, person.id);
-        // Log for monitoring but no action needed
-        break;
-      }
+        case "person.created":
+        case "person.updated":
+        case "person.deleted": {
+          const person = event.data.object as Stripe.Person;
+          console.log(`Person event for account: ${event.account}`, person.id);
+          // Log for monitoring but no action needed
+          break;
+        }
 
-      case "payout.created":
-      case "payout.updated":
-      case "payout.paid":
-      case "payout.failed": {
-        const payout = event.data.object as Stripe.Payout;
-        await handlePayoutEvent(event.type, payout, event.account!);
-        break;
-      }
+        case "payout.created":
+        case "payout.updated":
+        case "payout.paid":
+        case "payout.failed": {
+          const payout = event.data.object as Stripe.Payout;
+          await handlePayoutEvent(event.type, payout, event.account!, tx);
+          break;
+        }
 
-      case "transfer.created":
-      case "transfer.updated": {
-        const transfer = event.data.object as Stripe.Transfer;
-        console.log(`Transfer ${event.type} for amount: ${transfer.amount}`);
-        // These are logged for reconciliation
-        break;
-      }
+        case "transfer.created":
+        case "transfer.updated": {
+          const transfer = event.data.object as Stripe.Transfer;
+          console.log(`Transfer ${event.type} for amount: ${transfer.amount}`);
+          // These are logged for reconciliation
+          break;
+        }
 
-      default:
-        console.log(`Unhandled Connect webhook event type: ${event.type}`);
+        default:
+          console.log(`Unhandled Connect webhook event type: ${event.type}`);
+      }
+    });
+
+    if (!result.success) {
+      console.error(`Connect webhook ${event.id} processing failed:`, result.error);
+      // Return 200 to acknowledge receipt even on failure
+      return NextResponse.json({ 
+        received: true, 
+        warning: "Event received but processing failed. Will retry." 
+      });
     }
 
     return NextResponse.json({ received: true });
@@ -119,7 +127,8 @@ export const POST = withRateLimit('webhook', async (request: NextRequest) => {
 /**
  * Handle account.updated events
  */
-async function handleAccountUpdated(account: Stripe.Account) {
+async function handleAccountUpdated(account: Stripe.Account, tx?: any) {
+  const database = tx || db;
   try {
     // Check if onboarding is complete
     const onboardingComplete = 
@@ -128,7 +137,7 @@ async function handleAccountUpdated(account: Stripe.Account) {
       account.details_submitted;
 
     // Find provider by Stripe account ID
-    const [provider] = await db
+    const [provider] = await database
       .select()
       .from(providersTable)
       .where(eq(providersTable.stripeConnectAccountId, account.id))
@@ -140,7 +149,7 @@ async function handleAccountUpdated(account: Stripe.Account) {
     }
 
     // Update provider's onboarding status
-    await db
+    await database
       .update(providersTable)
       .set({
         stripeOnboardingComplete: onboardingComplete,
@@ -175,12 +184,13 @@ async function handleAccountUpdated(account: Stripe.Account) {
 /**
  * Handle account.application.authorized events
  */
-async function handleAccountAuthorized(account: Stripe.Account) {
+async function handleAccountAuthorized(account: Stripe.Account, tx?: any) {
+  const database = tx || db;
   try {
     console.log(`Account authorized: ${account.id}`);
     
     // Find provider
-    const [provider] = await db
+    const [provider] = await database
       .select()
       .from(providersTable)
       .where(eq(providersTable.stripeConnectAccountId, account.id))
@@ -192,7 +202,7 @@ async function handleAccountAuthorized(account: Stripe.Account) {
     }
 
     // Mark as active
-    await db
+    await database
       .update(providersTable)
       .set({
         isActive: true,
@@ -210,12 +220,13 @@ async function handleAccountAuthorized(account: Stripe.Account) {
 /**
  * Handle account.application.deauthorized events
  */
-async function handleAccountDeauthorized(account: Stripe.Account) {
+async function handleAccountDeauthorized(account: Stripe.Account, tx?: any) {
+  const database = tx || db;
   try {
     console.log(`Account deauthorized: ${account.id}`);
     
     // Find provider
-    const [provider] = await db
+    const [provider] = await database
       .select()
       .from(providersTable)
       .where(eq(providersTable.stripeConnectAccountId, account.id))
@@ -227,7 +238,7 @@ async function handleAccountDeauthorized(account: Stripe.Account) {
     }
 
     // Mark as inactive and clear Stripe account
-    await db
+    await database
       .update(providersTable)
       .set({
         stripeConnectAccountId: null,
@@ -248,7 +259,8 @@ async function handleAccountDeauthorized(account: Stripe.Account) {
 /**
  * Handle capability.updated events
  */
-async function handleCapabilityUpdated(capability: Stripe.Capability) {
+async function handleCapabilityUpdated(capability: Stripe.Capability, tx?: any) {
+  const database = tx || db;
   try {
     console.log(`Capability updated for account ${capability.account}:`, {
       id: capability.id,
@@ -257,7 +269,7 @@ async function handleCapabilityUpdated(capability: Stripe.Capability) {
     });
 
     // Find provider
-    const [provider] = await db
+    const [provider] = await database
       .select()
       .from(providersTable)
       .where(eq(providersTable.stripeConnectAccountId, capability.account as string))
@@ -304,8 +316,10 @@ async function handleCapabilityUpdated(capability: Stripe.Capability) {
 async function handlePayoutEvent(
   eventType: string,
   payout: Stripe.Payout,
-  accountId: string
+  accountId: string,
+  tx?: any
 ) {
+  const database = tx || db;
   try {
     console.log(`Payout ${eventType}:`, {
       accountId,
@@ -317,7 +331,7 @@ async function handlePayoutEvent(
     });
 
     // Find provider
-    const [provider] = await db
+    const [provider] = await database
       .select()
       .from(providersTable)
       .where(eq(providersTable.stripeConnectAccountId, accountId))

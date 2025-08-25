@@ -53,8 +53,9 @@ export const bookingsTable = pgTable("bookings", {
   // Booking confirmation
   confirmationCode: text("confirmation_code"),
   
-  // Guest booking flag
+  // Guest booking fields
   isGuestBooking: boolean("is_guest_booking").default(false).notNull(),
+  guestEmail: text("guest_email"), // Email for guest bookings (nullable for authenticated bookings)
   
   // Universal booking type
   bookingType: text("booking_type", { 

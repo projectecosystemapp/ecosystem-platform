@@ -1,5 +1,5 @@
 /**
- * CSRF Protection Utilities
+ * CSRF Protection Utilities - SECURED VERSION
  * 
  * Provides CSRF token generation, validation, and management
  * for protecting against Cross-Site Request Forgery attacks
@@ -9,7 +9,16 @@ import crypto from 'crypto';
 
 // CSRF token configuration
 const CSRF_TOKEN_LENGTH = 32;
-const CSRF_SECRET = process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production';
+
+// Require CSRF_SECRET from environment
+const CSRF_SECRET = process.env.CSRF_SECRET;
+if (!CSRF_SECRET || CSRF_SECRET.length < 32) {
+  throw new Error(
+    'CSRF_SECRET environment variable is required and must be at least 32 characters. ' +
+    'Generate one with: openssl rand -hex 32'
+  );
+}
+
 const CSRF_COOKIE_NAME = '__Host-csrf-token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
 
@@ -34,7 +43,7 @@ export function createSignedToken(token: string): string {
 }
 
 /**
- * Verify a signed CSRF token
+ * Verify a signed CSRF token with constant-time comparison
  */
 export function verifySignedToken(signedToken: string, maxAge: number = 86400000): boolean {
   try {
@@ -44,13 +53,19 @@ export function verifySignedToken(signedToken: string, maxAge: number = 86400000
     const [token, timestamp, signature] = parts;
     const data = `${token}.${timestamp}`;
     
-    // Verify signature
+    // Verify signature with constant-time comparison
     const expectedSignature = crypto
       .createHmac('sha256', CSRF_SECRET)
       .update(data)
       .digest('hex');
     
-    if (signature !== expectedSignature) return false;
+    // Use timing-safe comparison
+    if (!crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )) {
+      return false;
+    }
     
     // Check token age
     const tokenAge = Date.now() - parseInt(timestamp, 10);

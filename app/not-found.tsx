@@ -1,13 +1,9 @@
-import { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
 import { Search, Home, ArrowLeft, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-export const metadata: Metadata = {
-  title: "404 - Page Not Found",
-  description: "The page you're looking for doesn't exist.",
-};
 
 export default function NotFound() {
   return (

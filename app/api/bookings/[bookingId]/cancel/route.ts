@@ -1,16 +1,42 @@
+/**
+ * Cancel Booking API
+ * 
+ * Allows customers or providers to cancel a booking.
+ * Handles refund calculation based on cancellation policy.
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { getBookingById, cancelBooking } from "@/db/queries/bookings-queries";
 import { db } from "@/db/db";
-import { providersTable } from "@/db/schema/providers-schema";
-import { bookingStatus } from "@/db/schema/bookings-schema";
+import { bookingsTable, providersTable } from "@/db/schema/enhanced-booking-schema";
 import { eq } from "drizzle-orm";
+import { bookingStateMachine, BookingState } from "@/lib/bookings/booking-state-machine";
+import { notificationService } from "@/lib/notifications/notification-service";
+import { RateLimiter } from "@/lib/rate-limiter";
+
+// Rate limiter for cancellation actions
+const rateLimiter = new RateLimiter({
+  tokensPerInterval: 3,
+  interval: 60 * 1000, // 1 minute
+  fireImmediately: true
+});
 
 // Validation schema for cancelling a booking
 const cancelBookingSchema = z.object({
-  reason: z.string().min(1).max(500),
+  reason: z.string().min(10, 'Reason must be at least 10 characters').max(500),
+  urgency: z.enum(['immediate', 'planned']).optional(),
+  requestRefund: z.boolean().optional().default(true)
 });
+
+// Cancellation fee structure
+const CANCELLATION_POLICY = {
+  48: 0,     // 48+ hours: No fee (100% refund)
+  24: 0.25,  // 24-48 hours: 25% fee (75% refund)
+  12: 0.50,  // 12-24 hours: 50% fee (50% refund)
+  6: 0.75,   // 6-12 hours: 75% fee (25% refund)
+  0: 1.00    // <6 hours: 100% fee (no refund)
+};
 
 // POST /api/bookings/[bookingId]/cancel - Cancel a booking
 export async function POST(
@@ -18,7 +44,7 @@ export async function POST(
   { params }: { params: { bookingId: string } }
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return NextResponse.json(
@@ -26,12 +52,32 @@ export async function POST(
         { status: 401 }
       );
     }
+
+    // Rate limiting
+    const rateLimitResult = await rateLimiter.check(userId, 1);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { 
+          error: 'Too many cancellation attempts',
+          retryAfter: rateLimitResult.reset 
+        },
+        { status: 429 }
+      );
+    }
     
     const body = await request.json();
     const validatedData = cancelBookingSchema.parse(body);
     
-    // Get the booking
-    const booking = await getBookingById(params.bookingId);
+    // Get the booking with provider details
+    const [booking] = await db
+      .select({
+        booking: bookingsTable,
+        provider: providersTable
+      })
+      .from(bookingsTable)
+      .leftJoin(providersTable, eq(bookingsTable.providerId, providersTable.id))
+      .where(eq(bookingsTable.id, params.bookingId))
+      .limit(1);
     
     if (!booking) {
       return NextResponse.json(
@@ -41,14 +87,8 @@ export async function POST(
     }
     
     // Check authorization - both customer and provider can cancel
-    const isCustomer = booking.customerId === userId;
-    
-    const [provider] = await db
-      .select()
-      .from(providersTable)
-      .where(eq(providersTable.id, booking.providerId));
-    
-    const isProvider = provider?.userId === userId;
+    const isCustomer = booking.booking.customerId === userId;
+    const isProvider = booking.provider?.userId === userId;
     
     if (!isCustomer && !isProvider) {
       return NextResponse.json(
@@ -57,41 +97,148 @@ export async function POST(
       );
     }
     
-    // Check if booking can be cancelled
-    if (
-      booking.status === bookingStatus.COMPLETED ||
-      booking.status === bookingStatus.CANCELLED
-    ) {
+    // Check if booking can be cancelled based on current state
+    const currentState = booking.booking.status as BookingState;
+    const cancellableStates = [
+      BookingState.INITIATED,
+      BookingState.PENDING_PROVIDER,
+      BookingState.ACCEPTED,
+      BookingState.PAYMENT_PENDING,
+      BookingState.PAYMENT_SUCCEEDED,
+      BookingState.IN_PROGRESS // Allow cancellation even during service
+    ];
+    
+    if (!cancellableStates.includes(currentState)) {
       return NextResponse.json(
-        { error: `Cannot cancel booking with status: ${booking.status}` },
+        { 
+          error: `Cannot cancel booking`,
+          message: `Booking is in ${currentState} state and cannot be cancelled`,
+          currentState 
+        },
         { status: 400 }
       );
     }
     
-    // Calculate cancellation window
-    const hoursUntilBooking = Math.floor(
-      (booking.bookingDate.getTime() - Date.now()) / (1000 * 60 * 60)
-    );
+    // Calculate refund amount based on cancellation policy
+    const bookingDate = new Date(booking.booking.bookingDate);
+    const hoursUntilBooking = Math.max(0, (bookingDate.getTime() - Date.now()) / (1000 * 60 * 60));
     
-    // Warn about late cancellation fee
-    let message = "Booking cancelled successfully";
-    if (hoursUntilBooking < 24 && booking.status === bookingStatus.CONFIRMED) {
-      message = "Booking cancelled. A late cancellation fee (25%) may apply.";
+    let cancellationFeeRate = 0;
+    let refundAmount = 0;
+    let refundPercentage = 100;
+    
+    if (booking.booking.stripePaymentIntentId && validatedData.requestRefund) {
+      // Determine cancellation fee based on hours until booking
+      if (hoursUntilBooking >= 48) {
+        cancellationFeeRate = CANCELLATION_POLICY[48];
+        refundPercentage = 100;
+      } else if (hoursUntilBooking >= 24) {
+        cancellationFeeRate = CANCELLATION_POLICY[24];
+        refundPercentage = 75;
+      } else if (hoursUntilBooking >= 12) {
+        cancellationFeeRate = CANCELLATION_POLICY[12];
+        refundPercentage = 50;
+      } else if (hoursUntilBooking >= 6) {
+        cancellationFeeRate = CANCELLATION_POLICY[6];
+        refundPercentage = 25;
+      } else {
+        cancellationFeeRate = CANCELLATION_POLICY[0];
+        refundPercentage = 0;
+      }
+      
+      // Provider cancellations always get full refund
+      if (isProvider) {
+        refundAmount = booking.booking.totalAmount;
+        refundPercentage = 100;
+        cancellationFeeRate = 0;
+      } else {
+        refundAmount = booking.booking.totalAmount * (1 - cancellationFeeRate);
+      }
     }
     
-    // Cancel the booking
-    const cancelledBooking = await cancelBooking(
+    // Cancel the booking using state machine
+    await bookingStateMachine.cancelBooking(
       params.bookingId,
+      userId,
       validatedData.reason,
-      userId
+      refundAmount
     );
+    
+    // Store cancellation details
+    const cancellationDetails = {
+      reason: validatedData.reason,
+      urgency: validatedData.urgency,
+      cancelledBy: isCustomer ? 'customer' : 'provider',
+      hoursBeforeBooking: Math.round(hoursUntilBooking),
+      cancellationFeeRate,
+      refundAmount,
+      refundPercentage,
+      cancelledAt: new Date().toISOString()
+    };
+    
+    await db
+      .update(bookingsTable)
+      .set({
+        cancellationReason: validatedData.reason,
+        cancelledBy: userId,
+        cancelledAt: new Date(),
+        providerNotes: JSON.stringify(cancellationDetails),
+        updatedAt: new Date()
+      })
+      .where(eq(bookingsTable.id, params.bookingId));
+    
+    // Send cancellation notifications
+    await notificationService.sendBookingCancelledNotification({
+      bookingId: params.bookingId,
+      customerId: booking.booking.customerId || undefined,
+      guestEmail: booking.booking.guestEmail || undefined,
+      providerId: booking.booking.providerId,
+      providerName: booking.provider?.businessName || 'Provider',
+      cancelledBy: isCustomer ? 'customer' : 'provider',
+      reason: validatedData.reason,
+      refundAmount,
+      refundPercentage,
+      bookingDate: booking.booking.bookingDate,
+      startTime: booking.booking.startTime,
+      serviceName: booking.booking.serviceName
+    });
+    
+    // Prepare response message
+    let message = "Booking cancelled successfully";
+    if (refundAmount > 0) {
+      message = `Booking cancelled. ${refundPercentage}% refund (${new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(refundAmount)}) will be processed within 5-10 business days.`;
+    } else if (booking.booking.stripePaymentIntentId) {
+      message = "Booking cancelled. No refund due to late cancellation policy.";
+    }
+    
+    // Get updated booking
+    const [updatedBooking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, params.bookingId))
+      .limit(1);
     
     return NextResponse.json({
       success: true,
-      booking: cancelledBooking,
       message,
-      lateCancellation: hoursUntilBooking < 24,
+      booking: {
+        id: updatedBooking.id,
+        status: updatedBooking.status,
+        cancelledAt: updatedBooking.cancelledAt,
+        cancellationReason: updatedBooking.cancellationReason
+      },
+      cancellation: {
+        hoursBeforeBooking: Math.round(hoursUntilBooking),
+        cancellationFee: cancellationFeeRate * 100 + '%',
+        refundAmount,
+        refundPercentage: refundPercentage + '%',
+        cancelledBy: isCustomer ? 'customer' : 'provider'
+      }
     });
+    
   } catch (error) {
     console.error("Error cancelling booking:", error);
     
@@ -103,6 +250,16 @@ export async function POST(
     }
     
     if (error instanceof Error) {
+      if (error.message.includes('Invalid state transition')) {
+        return NextResponse.json(
+          { 
+            error: 'Invalid operation',
+            message: error.message 
+          },
+          { status: 400 }
+        );
+      }
+      
       return NextResponse.json(
         { error: error.message },
         { status: 400 }
@@ -111,6 +268,118 @@ export async function POST(
     
     return NextResponse.json(
       { error: "Failed to cancel booking" },
+      { status: 500 }
+    );
+  }
+}
+
+// GET endpoint to check cancellation policy and calculate refund
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { bookingId: string } }
+) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const bookingId = params.bookingId;
+
+    // Get booking
+    const [booking] = await db
+      .select({
+        booking: bookingsTable,
+        provider: providersTable
+      })
+      .from(bookingsTable)
+      .leftJoin(providersTable, eq(bookingsTable.providerId, providersTable.id))
+      .where(eq(bookingsTable.id, bookingId))
+      .limit(1);
+
+    if (!booking) {
+      return NextResponse.json(
+        { error: 'Booking not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check permissions
+    const isCustomer = booking.booking.customerId === userId;
+    const isProvider = booking.provider?.userId === userId;
+    
+    if (!isCustomer && !isProvider) {
+      return NextResponse.json(
+        { error: 'Unauthorized to view cancellation details' },
+        { status: 403 }
+      );
+    }
+
+    // Calculate cancellation details
+    const bookingDate = new Date(booking.booking.bookingDate);
+    const hoursUntilBooking = Math.max(0, (bookingDate.getTime() - Date.now()) / (1000 * 60 * 60));
+    
+    // Determine refund based on policy
+    let refundPercentage = 0;
+    if (isProvider || hoursUntilBooking >= 48) {
+      refundPercentage = 100;
+    } else if (hoursUntilBooking >= 24) {
+      refundPercentage = 75;
+    } else if (hoursUntilBooking >= 12) {
+      refundPercentage = 50;
+    } else if (hoursUntilBooking >= 6) {
+      refundPercentage = 25;
+    }
+    
+    const refundAmount = booking.booking.totalAmount * (refundPercentage / 100);
+    const cancellationFee = booking.booking.totalAmount - refundAmount;
+    
+    const currentState = booking.booking.status as BookingState;
+    const canCancel = [
+      BookingState.INITIATED,
+      BookingState.PENDING_PROVIDER,
+      BookingState.ACCEPTED,
+      BookingState.PAYMENT_PENDING,
+      BookingState.PAYMENT_SUCCEEDED,
+      BookingState.IN_PROGRESS
+    ].includes(currentState);
+
+    return NextResponse.json({
+      canCancel,
+      currentState,
+      isCustomer,
+      isProvider,
+      cancellationPolicy: {
+        hoursUntilBooking: Math.round(hoursUntilBooking),
+        refundPercentage,
+        refundAmount,
+        cancellationFee,
+        policy: {
+          '48+ hours': '100% refund',
+          '24-48 hours': '75% refund',
+          '12-24 hours': '50% refund',
+          '6-12 hours': '25% refund',
+          'Less than 6 hours': 'No refund'
+        },
+        providerCancellation: 'Always 100% refund for customer'
+      },
+      booking: {
+        id: booking.booking.id,
+        status: booking.booking.status,
+        serviceName: booking.booking.serviceName,
+        bookingDate: booking.booking.bookingDate,
+        startTime: booking.booking.startTime,
+        totalAmount: booking.booking.totalAmount
+      }
+    });
+
+  } catch (error) {
+    console.error('Error checking cancellation policy:', error);
+    return NextResponse.json(
+      { error: 'Failed to check cancellation policy' },
       { status: 500 }
     );
   }

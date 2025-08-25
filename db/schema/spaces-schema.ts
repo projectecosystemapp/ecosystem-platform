@@ -37,6 +37,9 @@ export const spacesTable = pgTable("spaces", {
   zipCode: text("zip_code").notNull(),
   country: text("country").default("US").notNull(),
   coordinates: jsonb("coordinates").$type<{ lat: number; lng: number }>(),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  geocodedAt: timestamp("geocoded_at"),
   neighborhood: text("neighborhood"),
   
   // Specifications

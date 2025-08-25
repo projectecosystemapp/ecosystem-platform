@@ -4,3 +4,7 @@ export * from "./providers-schema";
 export * from "./bookings-schema";
 export * from "./reviews-schema";
 export * from "./webhook-events-schema";
+export * from "./events-schema";
+export * from "./spaces-schema";
+export * from "./things-schema";
+export * from "./location-cache-schema";

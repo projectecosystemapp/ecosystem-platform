@@ -85,6 +85,34 @@
       "when": 1755963453806,
       "tag": "0011_striped_hiroim",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1755975997923,
+      "tag": "0012_brave_red_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1755976080651,
+      "tag": "0013_crazy_skrulls",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1755976153648,
+      "tag": "0014_superb_warpath",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1756075467242,
+      "tag": "0015_gifted_roulette",
+      "breakpoints": true
     }
   ]
 }

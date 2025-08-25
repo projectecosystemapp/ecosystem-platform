@@ -52,6 +52,9 @@ export const eventsTable = pgTable("events", {
     country?: string;
     coordinates?: { lat: number; lng: number };
   }>(),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  geocodedAt: timestamp("geocoded_at"),
   
   // Capacity & Pricing
   maxAttendees: integer("max_attendees"),

@@ -5,8 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
 import { db } from "@/db/db";
-import { bookingsTable, transactionsTable, webhookEventsTable } from "@/db/schema";
+import { bookingsTable, transactionsTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { processWebhookWithIdempotency } from "@/lib/webhook-idempotency";
 
 const relevantEvents = new Set([
   "checkout.session.completed", 
@@ -49,131 +50,70 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 
-  // IDEMPOTENCY CHECK: Check if we've already processed this event
-  try {
-    const existingEvent = await db
-      .select()
-      .from(webhookEventsTable)
-      .where(eq(webhookEventsTable.eventId, event.id))
-      .limit(1);
-
-    if (existingEvent.length > 0) {
-      console.log(`Webhook event ${event.id} already processed, skipping`);
-      return NextResponse.json({ received: true });
-    }
-  } catch (error) {
-    console.error(`Error checking for duplicate webhook event: ${error}`);
-    // Continue processing even if duplicate check fails to avoid losing events
-  }
-
-  // Store the webhook event for idempotency and audit
-  try {
-    await db.transaction(async (tx) => {
-      // Insert the webhook event record
-      await tx.insert(webhookEventsTable).values({
-        eventId: event.id,
-        eventType: event.type,
-        status: "processing",
-        payload: event as any, // Store the entire event for audit purposes
-        createdAt: new Date(),
-      });
-
-      // Process the webhook if it's a relevant event
-      if (relevantEvents.has(event.type)) {
-        try {
-          switch (event.type) {
-        case "customer.subscription.updated":
-        case "customer.subscription.deleted":
-          await handleSubscriptionChange(event, tx);
-          break;
-
-        case "checkout.session.completed":
-          await handleCheckoutSession(event, tx);
-          break;
-          
-        case "invoice.payment_succeeded":
-          await handlePaymentSuccess(event, tx);
-          break;
-          
-        case "invoice.payment_failed":
-          await handlePaymentFailed(event, tx);
-          break;
-
-        // Booking payment events
-        case "payment_intent.succeeded":
-          await handleBookingPaymentSuccess(event, tx);
-          break;
-
-        case "payment_intent.payment_failed":
-          await handleBookingPaymentFailure(event, tx);
-          break;
-
-        case "payment_intent.canceled":
-          await handleBookingPaymentCancellation(event, tx);
-          break;
-
-        case "charge.dispute.created":
-          await handleBookingChargeDispute(event, tx);
-          break;
-
-        case "transfer.created":
-          await handleBookingTransferCreated(event, tx);
-          break;
-
-        // These event types don't exist in Stripe's type definitions
-        // case "transfer.paid":
-        //   await handleBookingTransferPaid(event);
-        //   break;
-
-        // case "transfer.failed":
-        //   await handleBookingTransferFailed(event);
-        //   break;
-
-            default:
-              throw new Error("Unhandled relevant event!");
-          }
-
-          // Mark the event as completed successfully
-          await tx
-            .update(webhookEventsTable)
-            .set({
-              status: "completed",
-              processedAt: new Date(),
-            })
-            .where(eq(webhookEventsTable.eventId, event.id));
-
-        } catch (error) {
-          // Mark the event as failed
-          await tx
-            .update(webhookEventsTable)
-            .set({
-              status: "failed",
-              errorMessage: error instanceof Error ? error.message : "Unknown error",
-              processedAt: new Date(),
-            })
-            .where(eq(webhookEventsTable.eventId, event.id));
-
-          throw error; // Re-throw to rollback transaction
-        }
-      } else {
-        // For non-relevant events, just mark as completed
-        await tx
-          .update(webhookEventsTable)
-          .set({
-            status: "completed",
-            processedAt: new Date(),
-          })
-          .where(eq(webhookEventsTable.eventId, event.id));
-      }
-    });
-
+  // Skip non-relevant events early
+  if (!relevantEvents.has(event.type)) {
+    console.log(`Skipping non-relevant event type: ${event.type}`);
     return NextResponse.json({ received: true });
-  } catch (error) {
-    console.error("Webhook processing failed:", error);
-    return NextResponse.json({ error: "Webhook handler failed. View your nextjs function logs." }, {
-      status: 400
+  }
+
+  // Process the webhook with idempotency guarantees
+  const result = await processWebhookWithIdempotency(event, async (event, tx) => {
+    switch (event.type) {
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted":
+        await handleSubscriptionChange(event, tx);
+        break;
+
+      case "checkout.session.completed":
+        await handleCheckoutSession(event, tx);
+        break;
+        
+      case "invoice.payment_succeeded":
+        await handlePaymentSuccess(event, tx);
+        break;
+        
+      case "invoice.payment_failed":
+        await handlePaymentFailed(event, tx);
+        break;
+
+      // Booking payment events
+      case "payment_intent.succeeded":
+        await handleBookingPaymentSuccess(event, tx);
+        break;
+
+      case "payment_intent.payment_failed":
+        await handleBookingPaymentFailure(event, tx);
+        break;
+
+      case "payment_intent.canceled":
+        await handleBookingPaymentCancellation(event, tx);
+        break;
+
+      case "charge.dispute.created":
+        await handleBookingChargeDispute(event, tx);
+        break;
+
+      case "transfer.created":
+        await handleBookingTransferCreated(event, tx);
+        break;
+
+      default:
+        console.warn(`Unhandled event type: ${event.type}`);
+    }
+  });
+
+  if (!result.success) {
+    console.error(`Webhook ${event.id} processing failed:`, result.error);
+    // Return 200 to acknowledge receipt even on failure
+    // This prevents Stripe from retrying immediately
+    // Our system will handle retries based on the stored failed events
+    return NextResponse.json({ 
+      received: true, 
+      warning: "Event received but processing failed. Will retry." 
     });
   }
+
+  return NextResponse.json({ received: true });
 }
 
 async function handleSubscriptionChange(event: Stripe.Event, tx?: any) {

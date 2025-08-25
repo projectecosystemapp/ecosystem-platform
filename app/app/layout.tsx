@@ -1,13 +1,15 @@
-import NotebookLayout from '@/components/notebook/NotebookLayout';
+"use client";
 
-export default function NotebookRootLayout({
+import MarketplaceLayout from '@/components/marketplace/MarketplaceLayout';
+
+export default function MarketplaceRootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <NotebookLayout>
+    <MarketplaceLayout>
       {children}
-    </NotebookLayout>
+    </MarketplaceLayout>
   );
 }
