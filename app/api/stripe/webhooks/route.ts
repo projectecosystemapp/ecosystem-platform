@@ -41,13 +41,18 @@ export async function POST(req: NextRequest) {
 
   try {
     if (!sig || !webhookSecret) {
-      throw new Error("Webhook secret or signature missing");
+      // Log to security monitoring as per SECURITY-AUDIT.md
+      // await logSecurityEvent({ type: 'WEBHOOK_SIGNATURE_MISSING', ip: req.headers.get('x-forwarded-for'), timestamp: new Date() });
+      console.error('Webhook secret or signature missing - potential attack');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err: any) {
-    console.error(`Webhook Error: ${err.message}`);
-    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
+    console.error(`Webhook signature verification failed: ${err.message}`);
+    // Log to security monitoring as per SECURITY-AUDIT.md
+    // await logSecurityEvent({ type: 'WEBHOOK_SIGNATURE_INVALID', ip: req.headers.get('x-forwarded-for'), timestamp: new Date(), details: err.message });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   // Skip non-relevant events early

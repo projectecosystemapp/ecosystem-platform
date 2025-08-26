@@ -8,3 +8,4 @@ export * from "./events-schema";
 export * from "./spaces-schema";
 export * from "./things-schema";
 export * from "./location-cache-schema";
+export * from "./email-logs-schema";

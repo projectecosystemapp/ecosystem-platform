@@ -1,6 +1,6 @@
 import { db } from "@/db/db";
 import { webhookEventsTable } from "@/db/schema";
-import { eq, and, lt, or } from "drizzle-orm";
+import { eq, and, lt, or, gt, desc, sql } from "drizzle-orm";
 import Stripe from "stripe";
 
 /**
@@ -70,15 +70,15 @@ export async function processWebhookWithIdempotency<T = any>(
         console.log(`Webhook ${event.id} already processed with status: ${existingEvent.status}`);
         
         // If the event failed previously and hasn't exceeded retry limit, we might want to retry
-        if (existingEvent.status === "failed" && existingEvent.retryCount < 3) {
-          console.log(`Retrying failed webhook ${event.id} (attempt ${existingEvent.retryCount + 1})`);
+        if (existingEvent.status === "failed" && (existingEvent.retryCount ?? 0) < 3) {
+          console.log(`Retrying failed webhook ${event.id} (attempt ${(existingEvent.retryCount ?? 0) + 1})`);
           
           // Update retry count and status
           await tx
             .update(webhookEventsTable)
             .set({
               status: "processing",
-              retryCount: existingEvent.retryCount + 1,
+              retryCount: (existingEvent.retryCount ?? 0) + 1,
             })
             .where(eq(webhookEventsTable.id, existingEvent.id));
         } else {
@@ -162,7 +162,7 @@ export async function cleanupOldWebhookEvents(): Promise<number> {
         )
       );
 
-    const deletedCount = result.rowCount || 0;
+    const deletedCount = (result as any).rowCount || 0;
     console.log(`Cleaned up ${deletedCount} old webhook events`);
     return deletedCount;
   } catch (error) {
@@ -219,7 +219,7 @@ export async function retryFailedWebhook(
       return false;
     }
 
-    if (webhookEvent.retryCount >= 3) {
+    if ((webhookEvent.retryCount ?? 0) >= 3) {
       console.error(`Webhook event ${eventId} has exceeded retry limit`);
       return false;
     }
@@ -249,7 +249,7 @@ export async function getWebhookHealthMetrics() {
     const statusCounts = await db
       .select({
         status: webhookEventsTable.status,
-        count: db.count(),
+        count: sql<number>`count(*)`,
       })
       .from(webhookEventsTable)
       .where(gt(webhookEventsTable.createdAt, oneDayAgo))
@@ -272,12 +272,8 @@ export async function getWebhookHealthMetrics() {
     const processingStats = await db
       .select({
         eventType: webhookEventsTable.eventType,
-        successCount: db.count(
-          eq(webhookEventsTable.status, "completed")
-        ),
-        failureCount: db.count(
-          eq(webhookEventsTable.status, "failed")
-        ),
+        successCount: sql<number>`count(*) filter (where ${webhookEventsTable.status} = 'completed')`,
+        failureCount: sql<number>`count(*) filter (where ${webhookEventsTable.status} = 'failed')`,
       })
       .from(webhookEventsTable)
       .where(gt(webhookEventsTable.createdAt, oneDayAgo))
@@ -295,5 +291,3 @@ export async function getWebhookHealthMetrics() {
   }
 }
 
-// Import gt and desc that were missing
-import { gt, desc } from "drizzle-orm";

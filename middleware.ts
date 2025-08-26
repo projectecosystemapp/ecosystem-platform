@@ -203,7 +203,7 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   // Step 10: Add security headers for embedding prevention
   if (!pathname.startsWith('/api/')) {
     // Prevent embedding in iframes (except for Stripe/Clerk frames)
-    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+    response.headers.set('X-Frame-Options', 'DENY');
   }
   
   return response;

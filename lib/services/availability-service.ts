@@ -129,13 +129,13 @@ export class AvailabilityService {
         .where(
           and(
             eq(availabilityCacheTable.providerId, providerId),
-            eq(availabilityCacheTable.date, date),
+            eq(availabilityCacheTable.date, date.toISOString().split('T')[0]),
             eq(availabilityCacheTable.startTime, startTime),
             eq(availabilityCacheTable.endTime, endTime),
             eq(availabilityCacheTable.isAvailable, true),
             or(
               isNull(availabilityCacheTable.lockedUntil),
-              lte(availabilityCacheTable.lockedUntil, new Date().toISOString())
+              lte(availabilityCacheTable.lockedUntil, new Date())
             )
           )
         )
@@ -181,7 +181,7 @@ export class AvailabilityService {
       if (releasedSlot) {
         await this.invalidateAvailabilityCache(
           releasedSlot.providerId, 
-          releasedSlot.date
+          new Date(releasedSlot.date)
         );
         return true;
       }
@@ -209,13 +209,13 @@ export class AvailabilityService {
       .where(
         and(
           eq(availabilityCacheTable.providerId, providerId),
-          eq(availabilityCacheTable.date, date),
+          eq(availabilityCacheTable.date, date.toISOString().split('T')[0]),
           eq(availabilityCacheTable.startTime, startTime),
           eq(availabilityCacheTable.endTime, endTime),
           eq(availabilityCacheTable.isAvailable, true),
           or(
             isNull(availabilityCacheTable.lockedUntil),
-            lte(availabilityCacheTable.lockedUntil, new Date().toISOString())
+            lte(availabilityCacheTable.lockedUntil, new Date())
           )
         )
       )
@@ -288,7 +288,7 @@ export class AvailabilityService {
       .where(
         and(
           not(isNull(availabilityCacheTable.lockedUntil)),
-          lte(availabilityCacheTable.lockedUntil, now)
+          lte(availabilityCacheTable.lockedUntil, new Date(now))
         )
       )
       .returning();
@@ -296,7 +296,7 @@ export class AvailabilityService {
     // Delete expired cache entries
     const deletedCache = await db
       .delete(availabilityCacheTable)
-      .where(lte(availabilityCacheTable.expiresAt, now))
+      .where(lte(availabilityCacheTable.expiresAt, new Date(now)))
       .returning();
 
     return {
@@ -346,12 +346,12 @@ export class AvailabilityService {
 
     return {
       date: request.date,
-      timezone: request.timezone || provider.timezone || 'UTC',
+      timezone: request.timezone || 'UTC',
       slots,
       provider: {
         id: provider.id,
         name: provider.displayName,
-        timezone: provider.timezone || 'UTC'
+        timezone: 'UTC'
       },
       service: service ? {
         id: service.id,
@@ -387,7 +387,7 @@ export class AvailabilityService {
       .where(
         and(
           eq(providerBlockedSlotsTable.providerId, providerId),
-          eq(providerBlockedSlotsTable.blockedDate, date)
+          eq(providerBlockedSlotsTable.blockedDate, date.toISOString().split('T')[0])
         )
       );
 
@@ -398,7 +398,7 @@ export class AvailabilityService {
       .where(
         and(
           eq(bookingsTable.providerId, providerId),
-          eq(bookingsTable.bookingDate, date),
+          eq(bookingsTable.bookingDate, date.toISOString().split('T')[0]),
           not(inArray(bookingsTable.status, ['cancelled', 'no_show']))
         )
       );
@@ -487,7 +487,7 @@ export class AvailabilityService {
         .insert(availabilityCacheTable)
         .values({
           providerId,
-          date,
+          date: date.toISOString().split('T')[0],
           startTime: slot.startTime,
           endTime: slot.endTime,
           isAvailable: slot.isAvailable,
@@ -504,7 +504,7 @@ export class AvailabilityService {
           set: {
             isAvailable: slot.isAvailable,
             isBooked: slot.isBooked ?? undefined,
-            computedAt: new Date().toISOString(),
+            computedAt: new Date(),
             expiresAt
           }
         });
@@ -516,22 +516,29 @@ export class AvailabilityService {
     date: Date,
     duration: number
   ): Promise<TimeSlot[]> {
-    return await db
+    const slots = await db
       .select()
       .from(availabilityCacheTable)
       .where(
         and(
           eq(availabilityCacheTable.providerId, providerId),
-          eq(availabilityCacheTable.date, date),
+          eq(availabilityCacheTable.date, date.toISOString().split('T')[0]),
           eq(availabilityCacheTable.isAvailable, true),
           or(
             isNull(availabilityCacheTable.lockedUntil),
-            lte(availabilityCacheTable.lockedUntil, new Date().toISOString())
+            lte(availabilityCacheTable.lockedUntil, new Date())
           )
         )
       )
       .orderBy(availabilityCacheTable.startTime)
       .limit(10);
+    
+    return slots.map(slot => ({
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      isAvailable: slot.isAvailable,
+      isBooked: slot.isBooked
+    }));
   }
 
   private generateDateRange(start: Date, end: Date): Date[] {

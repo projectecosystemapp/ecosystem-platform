@@ -1,5 +1,12 @@
 import '@testing-library/jest-dom'
 
+// Polyfills for Node.js environment
+if (typeof global.TextEncoder === 'undefined') {
+  const { TextEncoder, TextDecoder } = require('util');
+  global.TextEncoder = TextEncoder;
+  global.TextDecoder = TextDecoder;
+}
+
 // Mock environment variables for testing
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co'
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
@@ -8,6 +15,11 @@ process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_456'
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000'
 process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT = '10'
 process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT = '20'
+process.env.CSRF_SECRET = 'a'.repeat(64) // 64 character test secret
+process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-purposes'
+process.env.RESEND_API_KEY = 'test-resend-api-key'
+process.env.UPSTASH_REDIS_URL = 'redis://localhost:6379'
+process.env.UPSTASH_REDIS_TOKEN = 'test-redis-token'
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({

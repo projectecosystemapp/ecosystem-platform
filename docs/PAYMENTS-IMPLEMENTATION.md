@@ -241,12 +241,12 @@ stripe trigger payment_intent.succeeded \
 
 ## Critical Issues & Missing Implementations
 
-### 🔴 HIGH PRIORITY
+### ✅ HIGH PRIORITY (Addressed)
 
-1. **Missing Webhook Idempotency**
-   - Location: `/app/api/stripe/webhooks/route.ts`
-   - Risk: Duplicate database updates, double payouts
-   - Solution: Implement webhook_events table with event_id tracking
+1. **Webhook Idempotency (Documentation Outdated)**
+   - **Status**: Implemented.
+   - **Details**: The webhook handler in `/app/api/stripe/webhooks/route.ts` now correctly utilizes `processWebhookWithIdempotency` from `/lib/webhook-idempotency.ts`, which leverages the `webhook_events` table for idempotency tracking. The previous documentation was outdated.
+   - **Further Action**: Ensure comprehensive tests for webhook idempotency are in place.
 
 2. **Fee Configuration Mismatch**
    - Environment: 15% platform fee

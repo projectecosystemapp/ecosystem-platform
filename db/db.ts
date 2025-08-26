@@ -10,6 +10,12 @@ import {
 } from "./schema/providers-schema";
 import { bookingsTable, transactionsTable } from "./schema/bookings-schema";
 import { reviewsTable } from "./schema/reviews-schema";
+import { 
+  emailLogsTable, 
+  emailEventsTable, 
+  emailTemplatesTable, 
+  emailBlacklistTable 
+} from "./schema/email-logs-schema";
 
 // Define the schema properly
 const schema = { 
@@ -21,7 +27,11 @@ const schema = {
   providerBlockedSlots: providerBlockedSlotsTable,
   bookings: bookingsTable,
   transactions: transactionsTable,
-  reviews: reviewsTable
+  reviews: reviewsTable,
+  emailLogs: emailLogsTable,
+  emailEvents: emailEventsTable,
+  emailTemplates: emailTemplatesTable,
+  emailBlacklist: emailBlacklistTable
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment

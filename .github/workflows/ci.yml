@@ -67,6 +67,13 @@ jobs:
           format: 'HTML'
         continue-on-error: true
 
+      - name: Run Gitleaks
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          config: './.gitleaks.toml' # Optional: path to gitleaks config file
+          verbose: true
+        continue-on-error: false # This should fail the build if secrets are found
+
   # Job 3: Build and Test
   build-test:
     name: Build and Test

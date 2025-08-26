@@ -97,7 +97,7 @@ export class PayoutService {
         currency: request.currency || 'usd',
         platformFee: request.platformFee,
         netPayout: request.netPayout,
-        scheduledAt,
+        scheduledAt: scheduledAt.toISOString(),
         status: 'scheduled'
       })
       .returning();
@@ -192,7 +192,7 @@ export class PayoutService {
 
       // Check if enough time has passed for retry
       const retryDelay = this.getRetryDelayMs(payout.retryCount ?? 0);
-      const lastAttempt = payout.updatedAt || payout.createdAt;
+      const lastAttempt = payout.createdAt;
       const nextRetryTime = new Date(lastAttempt.getTime() + retryDelay);
 
       if (new Date() < nextRetryTime) {
@@ -223,8 +223,8 @@ export class PayoutService {
     if (dateRange) {
       conditions.push(
         and(
-          gte(payoutSchedulesTable.createdAt, dateRange.start),
-          lte(payoutSchedulesTable.createdAt, dateRange.end)
+          gte(payoutSchedulesTable.createdAt, dateRange.start.toISOString()),
+          lte(payoutSchedulesTable.createdAt, dateRange.end.toISOString())
         )
       );
     }
@@ -459,7 +459,7 @@ export class PayoutService {
   ): Promise<void> {
     try {
       await db.insert(bookingStateTransitionsTable).values({
-        bookingId: metadata.bookingId || payoutId, // Use payoutId as fallback
+        bookingId: (metadata.bookingId || payoutId) as string, // Use payoutId as fallback
         fromStatus: null,
         toStatus: event,
         triggeredBy: 'system',
@@ -533,7 +533,7 @@ export class PayoutService {
       .select()
       .from(payoutSchedulesTable)
       .where(
-        gte(payoutSchedulesTable.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+        gte(payoutSchedulesTable.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
       );
 
     const stats = payouts.reduce(

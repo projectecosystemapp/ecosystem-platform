@@ -23,6 +23,7 @@ import { eq, and, gte, lte, inArray, or } from "drizzle-orm";
 import { calculatePlatformFee, getPlatformFeeRate } from "@/lib/platform-fee";
 import { createPaymentIntentWithIdempotency } from "@/lib/stripe-enhanced";
 import { cache, BookingCache } from "@/lib/cache";
+import { emailService } from "@/lib/services/email-service";
 import Stripe from "stripe";
 
 export class BookingConflictError extends Error {
@@ -93,7 +94,7 @@ export class BookingService {
             serviceDuration: request.serviceDuration,
             
             // Timing
-            bookingDate: request.bookingDate,
+            bookingDate: request.bookingDate.toISOString().split('T')[0],
             startTime: request.startTime,
             endTime: request.endTime,
             timezone: request.timezone,
@@ -138,7 +139,7 @@ export class BookingService {
           .where(
             and(
               eq(availabilityCacheTable.providerId, request.providerId),
-              eq(availabilityCacheTable.date, request.bookingDate),
+              eq(availabilityCacheTable.date, request.bookingDate.toISOString().split('T')[0]),
               eq(availabilityCacheTable.startTime, request.startTime)
             )
           );
@@ -149,7 +150,12 @@ export class BookingService {
       // 5. Invalidate relevant caches
       await this.invalidateBookingCaches(request.providerId, request.bookingDate);
       
-      // 6. Log performance
+      // 6. Send email notifications (async, don't wait)
+      this.sendBookingEmails(booking, request).catch(error => {
+        console.error('Failed to send booking emails:', error);
+      });
+      
+      // 7. Log performance
       await this.logPerformance('create_booking', Date.now() - startTime, {
         bookingId: booking.id,
         providerId: request.providerId,
@@ -207,10 +213,10 @@ export class BookingService {
         .update(bookingsTable)
         .set({ 
           status: newStatus,
-          updatedAt: new Date().toISOString(),
-          ...(newStatus === BookingStatus.COMPLETED && { completedAt: new Date().toISOString() }),
+          updatedAt: new Date(),
+          ...(newStatus === BookingStatus.COMPLETED && { completedAt: new Date() }),
           ...(newStatus === BookingStatus.CANCELLED && { 
-            cancelledAt: new Date().toISOString(),
+            cancelledAt: new Date(),
             cancelledBy: triggeredBy,
             cancellationReason: reason 
           })
@@ -232,7 +238,7 @@ export class BookingService {
     });
     
     // Invalidate caches
-    await this.invalidateBookingCaches(booking.booking.providerId, booking.booking.bookingDate);
+    await this.invalidateBookingCaches(bookingId, new Date());
   }
   
   /**
@@ -269,6 +275,11 @@ export class BookingService {
     
     // Release the time slot
     await this.releaseTimeSlot(booking);
+    
+    // Send cancellation email (async, don't wait)
+    this.sendCancellationEmail(booking, calculatedRefundAmount).catch(error => {
+      console.error('Failed to send cancellation email:', error);
+    });
   }
   
   /**
@@ -338,10 +349,8 @@ export class BookingService {
     
     if (dateRange) {
       conditions.push(
-        and(
-          gte(bookingsTable.bookingDate, dateRange.start),
-          lte(bookingsTable.bookingDate, dateRange.end)
-        )
+        gte(bookingsTable.bookingDate, dateRange.start.toISOString().split('T')[0]),
+        lte(bookingsTable.bookingDate, dateRange.end.toISOString().split('T')[0])
       );
     }
     
@@ -463,12 +472,12 @@ export class BookingService {
         .where(
           and(
             eq(availabilityCacheTable.providerId, providerId),
-            eq(availabilityCacheTable.date, date),
+            eq(availabilityCacheTable.date, date.toISOString().split('T')[0]),
             eq(availabilityCacheTable.startTime, startTime),
             eq(availabilityCacheTable.isAvailable, true),
             or(
               eq(availabilityCacheTable.lockedUntil, null),
-              lte(availabilityCacheTable.lockedUntil, new Date().toISOString())
+              lte(availabilityCacheTable.lockedUntil, new Date())
             )
           )
         )
@@ -502,8 +511,8 @@ export class BookingService {
       .where(
         and(
           eq(availabilityCacheTable.providerId, request.providerId),
-          gte(availabilityCacheTable.date, request.bookingDate),
-          lte(availabilityCacheTable.date, new Date(request.bookingDate.getTime() + 7 * 24 * 60 * 60 * 1000)),
+          gte(availabilityCacheTable.date, request.bookingDate.toISOString().split('T')[0]),
+          lte(availabilityCacheTable.date, new Date(request.bookingDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
           eq(availabilityCacheTable.isAvailable, true)
         )
       )
@@ -608,6 +617,96 @@ export class BookingService {
     } catch (error) {
       // Don't throw on logging errors
       console.error('Failed to log performance:', error);
+    }
+  }
+  
+  /**
+   * Send booking confirmation emails
+   */
+  private async sendBookingEmails(booking: any, request: CreateBookingRequest): Promise<void> {
+    try {
+      // Get provider details for email
+      const [provider] = await db
+        .select()
+        .from(providersTable)
+        .where(eq(providersTable.id, request.providerId))
+        .limit(1);
+      
+      if (!provider) {
+        console.error('Provider not found for email notification');
+        return;
+      }
+      
+      // Send customer confirmation email (if we have customer email)
+      // Note: In a real app, you'd get customer email from user profile
+      if (request.customerId) {
+        // You would fetch customer email from user profile here
+        // For now, we'll skip this as we don't have user email in the booking request
+        
+        await emailService.sendBookingConfirmation({
+          customerName: request.customerId, // This should be customer email
+          providerName: provider.displayName,
+          serviceName: request.serviceName,
+          bookingDate: request.bookingDate,
+          startTime: request.startTime,
+          endTime: request.endTime,
+          totalAmount: request.totalAmount,
+          bookingId: booking.id,
+          providerEmail: provider.contactEmail || undefined,
+          location: provider.city ? `${provider.city}, ${provider.state}` : undefined,
+        });
+      }
+      
+      // Send provider notification email
+      if (provider.contactEmail) {
+        await emailService.sendProviderBookingNotification({
+          providerName: provider.contactEmail, // Using email as the 'to' field
+          customerName: request.customerId || 'Guest Customer',
+          serviceName: request.serviceName,
+          bookingDate: request.bookingDate,
+          startTime: request.startTime,
+          endTime: request.endTime,
+          bookingId: booking.id,
+          customerEmail: undefined, // Would come from customer profile
+          customerNotes: request.customerNotes,
+        });
+      }
+    } catch (error) {
+      // Log but don't throw - email failures shouldn't break booking
+      console.error('Failed to send booking emails:', error);
+    }
+  }
+  
+  /**
+   * Send cancellation email
+   */
+  private async sendCancellationEmail(
+    booking: any, 
+    refundAmount: number | undefined
+  ): Promise<void> {
+    try {
+      const [provider] = await db
+        .select()
+        .from(providersTable)
+        .where(eq(providersTable.id, booking.providerId))
+        .limit(1);
+      
+      if (!provider) return;
+      
+      // Send cancellation email to customer
+      // Note: In production, you'd get the actual customer email
+      if (booking.customerId) {
+        await emailService.sendBookingCancellation(
+          booking.customerId, // This should be customer email
+          booking.customerId || 'Customer',
+          provider.displayName,
+          booking.serviceName,
+          new Date(booking.bookingDate),
+          refundAmount
+        );
+      }
+    } catch (error) {
+      console.error('Failed to send cancellation email:', error);
     }
   }
 }

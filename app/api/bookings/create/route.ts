@@ -7,6 +7,7 @@ import { providersTable } from "@/db/schema/providers-schema";
 import { bookingStatus, type NewBooking } from "@/db/schema/bookings-schema";
 import { eq } from "drizzle-orm";
 import { withRateLimit } from "@/lib/rate-limit";
+import { calculatePlatformFees } from "@/lib/config/platform-fees";
 
 // Validation schema for creating a booking
 const createBookingSchema = z.object({
@@ -72,21 +73,16 @@ export const POST = withRateLimit('booking', async (request: NextRequest) => {
       );
     }
     
-    // Calculate fees based on whether it's a guest booking
-    const baseAmount = validatedData.servicePrice;
-    const platformFeeRate = 0.10; // 10% base platform fee
-    const guestSurchargeRate = validatedData.isGuestBooking ? 0.10 : 0; // Additional 10% for guests
+    // Calculate fees using centralized configuration
+    const feeCalculation = calculatePlatformFees(
+      validatedData.servicePrice * 100, // Convert to cents
+      validatedData.isGuestBooking || false
+    );
     
-    // Provider always receives 90% of the service price
-    const providerPayout = baseAmount * (1 - platformFeeRate);
-    
-    // Guest pays extra 10% on top of service price
-    const totalAmount = validatedData.isGuestBooking 
-      ? baseAmount * (1 + guestSurchargeRate) 
-      : baseAmount;
-    
-    // Platform fee includes base fee + guest surcharge
-    const platformFee = totalAmount - providerPayout;
+    // Convert back from cents for database storage
+    const providerPayout = feeCalculation.providerPayout / 100;
+    const totalAmount = feeCalculation.customerTotal / 100;
+    const platformFee = feeCalculation.totalPlatformRevenue / 100;
     
     // Generate confirmation code
     const confirmationCode = `BK${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
@@ -96,7 +92,7 @@ export const POST = withRateLimit('booking', async (request: NextRequest) => {
       providerId: validatedData.providerId,
       customerId: userId || `guest_${validatedData.guestEmail}`, // Use email as ID for guests
       serviceName: validatedData.serviceName,
-      servicePrice: baseAmount.toString(),
+      servicePrice: validatedData.servicePrice.toString(),
       serviceDuration: validatedData.serviceDuration,
       bookingDate: new Date(validatedData.bookingDate),
       startTime: validatedData.startTime,

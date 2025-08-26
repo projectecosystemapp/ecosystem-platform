@@ -24,7 +24,7 @@ const nextConfig = {
           // Remove default X-Powered-By header
           {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN',
+            value: 'DENY',
           },
         ],
       },

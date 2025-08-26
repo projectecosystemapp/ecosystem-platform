@@ -18,8 +18,8 @@ export function getCSPDirectives(): string {
     'default-src': ["'self'"],
     'script-src': [
       "'self'",
-      "'unsafe-inline'", // Required for Next.js inline scripts
-      "'unsafe-eval'", // Required for development (remove in production if possible)
+      // 'unsafe-inline', // TODO: Remove this in production by using nonces or external scripts
+      // 'unsafe-eval', // TODO: Remove this in production by using webpack config or external scripts
       'https://js.stripe.com',
       'https://checkout.stripe.com',
       'https://clerk.ecosystem-platform.com',
@@ -29,7 +29,7 @@ export function getCSPDirectives(): string {
     ].filter(Boolean),
     'style-src': [
       "'self'",
-      "'unsafe-inline'", // Required for styled-jsx and inline styles
+      // 'unsafe-inline', // TODO: Remove this in production by using external stylesheets or nonces
       'https://fonts.googleapis.com',
       'https://clerk.ecosystem-platform.com',
       'https://*.clerk.accounts.dev',

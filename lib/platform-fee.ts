@@ -12,8 +12,8 @@
  * @returns The fee percentage as a decimal (0.10 or 0.20)
  */
 export function getPlatformFeeRate(isAuthenticated: boolean): number {
-  const baseFeePercent = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || "10");
-  const guestFeePercent = parseFloat(process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT || "20");
+  const baseFeePercent = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT!);
+  const guestFeePercent = parseFloat(process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT!);
   
   return (isAuthenticated ? baseFeePercent : guestFeePercent) / 100;
 }
@@ -35,8 +35,8 @@ export function calculatePlatformFee(amount: number, isAuthenticated: boolean): 
  * @returns Formatted percentage string (e.g., "10%" or "20%")
  */
 export function getFormattedFeePercentage(isAuthenticated: boolean): string {
-  const baseFeePercent = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || "10");
-  const guestFeePercent = parseFloat(process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT || "20");
+  const baseFeePercent = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT!);
+  const guestFeePercent = parseFloat(process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT!);
   
   return `${isAuthenticated ? baseFeePercent : guestFeePercent}%`;
 }
@@ -47,14 +47,14 @@ export function getFormattedFeePercentage(isAuthenticated: boolean): string {
  * @returns Object with fee details
  */
 export function getFeeInfo(isAuthenticated: boolean) {
-  const baseFeePercent = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || "10");
-  const guestFeePercent = parseFloat(process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT || "20");
+  const baseFeePercent = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT!);
+  const guestFeePercent = parseFloat(process.env.NEXT_PUBLIC_GUEST_FEE_PERCENT!);
   
   return {
     rate: getPlatformFeeRate(isAuthenticated),
     percentage: isAuthenticated ? baseFeePercent : guestFeePercent,
     formatted: getFormattedFeePercentage(isAuthenticated),
-    isGuestRate: !isAuthenticated,
+    isGuestRate: !isAuthenticated, 
     savingsMessage: !isAuthenticated 
       ? `Sign in to save ${guestFeePercent - baseFeePercent}% on platform fees!`
       : null

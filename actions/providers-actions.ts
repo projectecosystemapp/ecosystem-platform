@@ -24,24 +24,40 @@ import {
 import { ActionResult } from "@/types/actions/actions-types";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
+import { sanitizationSchemas, sanitizeText, sanitizeNumber } from "@/lib/security/input-sanitization";
+
+// Validation schema for provider creation
+const createProviderSchema = z.object({
+  displayName: sanitizationSchemas.providerName,
+  tagline: z.string().max(100).optional().transform(val => val ? sanitizeText(val) : undefined),
+  bio: sanitizationSchemas.providerBio.optional(),
+  locationCity: z.string().max(50).optional().transform(val => val ? sanitizeText(val) : undefined),
+  locationState: z.string().max(50).optional().transform(val => val ? sanitizeText(val) : undefined),
+  hourlyRate: z.number().min(0).max(10000).optional(),
+  yearsExperience: z.number().min(0).max(100).optional(),
+  services: z.array(z.object({
+    name: sanitizationSchemas.serviceName,
+    description: sanitizationSchemas.serviceDescription,
+    duration: z.number().min(15).max(480),
+    price: z.number().min(0).max(100000),
+  })).optional(),
+});
 
 // Create a new provider profile
-export async function createProviderAction(data: {
-  displayName: string;
-  tagline?: string;
-  bio?: string;
-  locationCity?: string;
-  locationState?: string;
-  hourlyRate?: number;
-  yearsExperience?: number;
-  services?: Array<{
-    name: string;
-    description: string;
-    duration: number;
-    price: number;
-  }>;
-}): Promise<ActionResult<Provider>> {
+export async function createProviderAction(rawData: unknown): Promise<ActionResult<Provider>> {
   try {
+    // Validate and sanitize input
+    const validationResult = createProviderSchema.safeParse(rawData);
+    if (!validationResult.success) {
+      return { 
+        isSuccess: false, 
+        message: "Invalid input: " + validationResult.error.errors.map(e => e.message).join(", ") 
+      };
+    }
+    
+    const data = validationResult.data;
+    
     const { userId } = await auth();
     
     if (!userId) {

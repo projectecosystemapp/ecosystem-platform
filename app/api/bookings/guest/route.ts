@@ -12,6 +12,7 @@ import {
 import { withRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limit";
 import { createMarketplacePaymentIntent } from "@/lib/stripe";
 import { z } from "zod";
+import { calculatePlatformFees } from "@/lib/config/platform-fees";
 
 // Guest information schema
 const guestInfoSchema = z.object({
@@ -140,8 +141,17 @@ export const POST = withRateLimit(
         );
       }
 
-      // Calculate booking amounts with proper guest fee (20% for guests, 10% for authenticated)
-      const amounts = calculateBookingAmounts((bookingData as any).servicePrice, isAuthenticated);
+      // Calculate booking amounts using centralized fee configuration
+      const feeCalculation = calculatePlatformFees(
+        (bookingData as any).servicePrice * 100, // Convert to cents
+        !isAuthenticated // isGuest
+      );
+      
+      const amounts = {
+        totalAmount: feeCalculation.customerTotal,
+        platformFee: feeCalculation.totalPlatformRevenue,
+        providerPayout: feeCalculation.providerPayout
+      };
 
       // Prepare customer identifier
       const customerId = isAuthenticated ? userId : `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -240,12 +250,12 @@ export const POST = withRateLimit(
             platformFee: amounts.platformFee
           },
           feeBreakdown: {
-            servicePrice: bookingData.servicePrice,
-            basePlatformFee: Math.round(bookingData.servicePrice * 0.10),
-            guestSurcharge: !isAuthenticated ? Math.round(bookingData.servicePrice * 0.10) : 0,
-            totalPlatformFee: amounts.platformFee,
-            providerPayout: amounts.providerPayout,
-            totalAmount: amounts.totalAmount,
+            servicePrice: (bookingData as any).servicePrice,
+            basePlatformFee: feeCalculation.platformCommission / 100,
+            guestSurcharge: feeCalculation.guestSurcharge / 100,
+            totalPlatformFee: feeCalculation.totalPlatformRevenue / 100,
+            providerPayout: feeCalculation.providerPayout / 100,
+            totalAmount: feeCalculation.customerTotal / 100,
             isGuest: !isAuthenticated
           }
         }, { status: 201 });
