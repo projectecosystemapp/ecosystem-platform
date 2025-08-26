@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/db/db";
 import { bookingsTable, transactionsTable } from "@/db/schema/bookings-schema";
 import { providersTable } from "@/db/schema/providers-schema";
-import { servicesTable } from "@/db/schema/services-schema";
+import { servicesTable } from "@/db/schema/enhanced-booking-schema";
 import { eq, and } from "drizzle-orm";
 import { withRateLimitRedis } from "@/lib/rate-limit-redis";
 import { createPaymentIntentWithIdempotency } from "@/lib/stripe-enhanced";
