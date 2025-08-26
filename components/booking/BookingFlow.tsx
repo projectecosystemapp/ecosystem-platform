@@ -31,7 +31,7 @@ import { createBookingAction } from "@/actions/bookings-actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { useGuestCheckout } from "@/contexts/guest-checkout-context";
+import { useGuestCheckoutStore } from "@/lib/stores/guest-checkout-store";
 
 interface BookingFlowProps {
   provider: {
@@ -65,7 +65,7 @@ export function BookingFlow({
 }: BookingFlowProps) {
   const router = useRouter();
   const { isSignedIn } = useAuth();
-  const { isGuestCheckout, guestInfo } = useGuestCheckout();
+  const { isGuestCheckout, guestInfo } = useGuestCheckoutStore();
   
   // Booking state
   const [currentStep, setCurrentStep] = useState<BookingStep>(
@@ -198,8 +198,9 @@ export function BookingFlow({
         "HH:mm"
       );
 
-      // Use the guest booking API endpoint
-      const response = await fetch("/api/bookings/guest", {
+      // Use appropriate API endpoint based on authentication status
+      const endpoint = isSignedIn ? "/api/bookings/customer" : "/api/bookings/guest";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -213,7 +214,7 @@ export function BookingFlow({
           startTime,
           endTime,
           customerNotes: customerNotes || undefined,
-          // Include guest info if guest checkout
+          // Include guest info only if guest checkout
           guestInfo: !isSignedIn && guestInfo ? guestInfo : undefined,
         }),
       });

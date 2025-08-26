@@ -15,7 +15,7 @@ import {
   LogIn,
   UserPlus
 } from "lucide-react";
-import { useGuestCheckout } from "@/contexts/guest-checkout-context";
+import { useGuestCheckoutStore } from "@/lib/stores/guest-checkout-store";
 import { useAuth, useSignIn } from "@clerk/nextjs";
 import Link from "next/link";
 
@@ -25,7 +25,7 @@ interface GuestInfoFormProps {
 }
 
 export function GuestInfoForm({ onSubmit, onSignIn }: GuestInfoFormProps) {
-  const { setGuestInfo, setIsGuestCheckout } = useGuestCheckout();
+  const { setGuestInfo, setIsGuestCheckout } = useGuestCheckoutStore();
   const { isSignedIn } = useAuth();
   const [formData, setFormData] = useState({
     email: "",

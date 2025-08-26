@@ -7,7 +7,7 @@
 
 import { Button } from "@/components/ui/button";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
-import { Home, LayoutDashboard, Menu, X } from "lucide-react";
+import { Home, LayoutDashboard, Menu, X, Search } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
@@ -118,6 +118,13 @@ export default function Header() {
                 icon={<Home size={18} />} 
                 label="Home"
                 isActive={isActive("/")}
+              />
+              
+              <NavButton 
+                href="/marketplace" 
+                icon={<Search size={18} />} 
+                label="Marketplace"
+                isActive={isActive("/marketplace")}
               />
 
               <SignedIn>
@@ -241,6 +248,14 @@ export default function Header() {
                   icon={<Home size={18} />} 
                   label="Home" 
                   isActive={isActive("/")}
+                  onClick={toggleMenu}
+                />
+                
+                <MobileNavLink 
+                  href="/marketplace" 
+                  icon={<Search size={18} />} 
+                  label="Marketplace" 
+                  isActive={isActive("/marketplace")}
                   onClick={toggleMenu}
                 />
 

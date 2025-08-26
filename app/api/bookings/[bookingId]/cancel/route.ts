@@ -9,11 +9,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { db } from "@/db/db";
-import { bookingsTable, providersTable } from "@/db/schema/enhanced-booking-schema";
+import { bookingsTable, providersTable, transactionsTable } from "@/db/schema/enhanced-booking-schema";
 import { eq } from "drizzle-orm";
 import { bookingStateMachine, BookingState } from "@/lib/bookings/booking-state-machine";
 import { notificationService } from "@/lib/notifications/notification-service";
 import { RateLimiter } from "@/lib/rate-limiter";
+import { createRefundWithIdempotency } from "@/lib/stripe-enhanced";
+import { dollarsToCents } from "@/lib/payments/fee-calculator";
 
 // Rate limiter for cancellation actions
 const rateLimiter = new RateLimiter({
@@ -156,6 +158,68 @@ export async function POST(
       }
     }
     
+    // Process actual Stripe refund if refund amount > 0
+    let stripeRefund = null;
+    if (booking.booking.stripePaymentIntentId && refundAmount > 0 && validatedData.requestRefund) {
+      try {
+        console.log(`Processing Stripe refund for booking ${params.bookingId}:`, {
+          paymentIntentId: booking.booking.stripePaymentIntentId,
+          refundAmountCents: dollarsToCents(refundAmount),
+          refundPercentage: refundPercentage + '%'
+        });
+
+        stripeRefund = await createRefundWithIdempotency({
+          paymentIntentId: booking.booking.stripePaymentIntentId,
+          amount: dollarsToCents(refundAmount), // Convert to cents
+          reason: "requested_by_customer",
+          bookingId: params.bookingId,
+          metadata: {
+            bookingId: params.bookingId,
+            cancellationReason: validatedData.reason,
+            cancelledBy: isCustomer ? 'customer' : 'provider',
+            hoursBeforeBooking: Math.round(hoursUntilBooking).toString(),
+            refundPercentage: refundPercentage.toString(),
+          },
+          refundApplicationFee: true, // Refund platform fee as well
+        });
+
+        console.log(`Stripe refund created successfully:`, {
+          refundId: stripeRefund.id,
+          amount: stripeRefund.amount,
+          status: stripeRefund.status
+        });
+
+        // Update transaction record with refund information
+        await db
+          .update(transactionsTable)
+          .set({
+            status: "refunded",
+            refundId: stripeRefund.id,
+            refundAmount: (stripeRefund.amount / 100).toFixed(2), // Convert back to dollars
+            refundedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(transactionsTable.bookingId, params.bookingId));
+
+      } catch (refundError) {
+        console.error('Stripe refund failed:', refundError);
+        
+        // Log the refund failure but don't block the cancellation
+        // The booking can still be cancelled, but customer service will need to handle refund manually
+        await db
+          .update(transactionsTable)
+          .set({
+            status: "refund_pending",
+            refundError: refundError instanceof Error ? refundError.message : 'Unknown refund error',
+            updatedAt: new Date(),
+          })
+          .where(eq(transactionsTable.bookingId, params.bookingId));
+
+        // Continue with cancellation but note the refund issue
+        console.warn('Booking will be cancelled but refund requires manual processing');
+      }
+    }
+
     // Cancel the booking using state machine
     await bookingStateMachine.cancelBooking(
       params.bookingId,
@@ -203,15 +267,33 @@ export async function POST(
       serviceName: booking.booking.serviceName
     });
     
-    // Prepare response message
+    // Prepare response message based on refund processing result
     let message = "Booking cancelled successfully";
+    let refundStatus = "none";
+
     if (refundAmount > 0) {
-      message = `Booking cancelled. ${refundPercentage}% refund (${new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD'
-      }).format(refundAmount)}) will be processed within 5-10 business days.`;
+      if (stripeRefund) {
+        // Stripe refund processed successfully
+        refundStatus = "processed";
+        message = `Booking cancelled successfully. ${refundPercentage}% refund (${new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD'
+        }).format(refundAmount)}) has been initiated and will appear in your account within 5-10 business days.`;
+      } else if (validatedData.requestRefund) {
+        // Refund was requested but failed to process
+        refundStatus = "pending_manual";
+        message = `Booking cancelled successfully. ${refundPercentage}% refund (${new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD'
+        }).format(refundAmount)}) is pending manual processing. Our support team will contact you within 24 hours.`;
+      } else {
+        // No refund requested
+        refundStatus = "waived";
+        message = "Booking cancelled successfully. No refund requested.";
+      }
     } else if (booking.booking.stripePaymentIntentId) {
-      message = "Booking cancelled. No refund due to late cancellation policy.";
+      refundStatus = "policy_denied";
+      message = "Booking cancelled successfully. No refund available due to late cancellation policy.";
     }
     
     // Get updated booking
@@ -236,6 +318,13 @@ export async function POST(
         refundAmount,
         refundPercentage: refundPercentage + '%',
         cancelledBy: isCustomer ? 'customer' : 'provider'
+      },
+      refund: {
+        status: refundStatus,
+        amount: refundAmount,
+        stripeRefundId: stripeRefund?.id || null,
+        stripeRefundStatus: stripeRefund?.status || null,
+        processingTimeBusinessDays: stripeRefund ? "5-10" : null,
       }
     });
     

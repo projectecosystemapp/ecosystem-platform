@@ -1901,7 +1901,7 @@ No alternate UI libraries permitted unless DEVIATION flagged.
   
 * Canonical font: Inter (via next/font/google).  
 * Code/monospace: IBM Plex Mono.  
-* Sizing scale (Tailwind tokens):   
+* Sizing scale (Tailwind tokens):  
     * Heading 1: text-4xl font-bold  
     * Heading 2: text-2xl font-semibold  
     * Heading 3: text-xl font-semibold  
@@ -1944,7 +1944,7 @@ Dark mode supported via class="dark".
   
   
 * Grid system: Tailwind grid/flex only.  
-* Container max-widths:   
+* Container max-widths:  
     * sm: 640px  
     * md: 768px  
     * lg: 1024px  
@@ -2027,7 +2027,7 @@ Dark mode supported via class="dark".
 ## **8.7 Animations & Micro-Interactions**  
   
   
-* Framer Motion:   
+* Framer Motion:  
     * Fade/slide-in for modals.  
     * Hover spring scale (0.98–1.02) on buttons/cards.  
     * Booking confirmation → subtle checkmark morph.  
@@ -2044,23 +2044,23 @@ Dark mode supported via class="dark".
   
 Composition:  
   
-1. Hero Section:   
+1. Hero Section:  
     * Background image/video (Supabase Storage).  
     * Provider name + categories.  
     * “Book Now” CTA.  
 2.   
-3. Services Section:   
+3. Services Section:  
     * List of services with price/duration.  
     * CTA to expand availability.  
 4.   
-5. About Section:   
+5. About Section:  
     * Provider bio, testimonials.  
 6.   
-7. Availability Section:   
+7. Availability Section:  
     * Calendar widget (14-day preview).  
     * Click → open booking modal.  
 8.   
-9. Reviews Section:   
+9. Reviews Section:  
     * Customer ratings, text.  
     * Average rating + count.  
 10.   
@@ -2073,7 +2073,7 @@ Composition:
   
   
 * Sidebar navigation (services, bookings, earnings, settings).  
-* Dashboard cards with key metrics:   
+* Dashboard cards with key metrics:  
     * Upcoming bookings.  
     * Earnings this month.  
     * New reviews.  
@@ -2087,7 +2087,7 @@ Composition:
 ## **8.10 Customer Booking Flow UI**  
   
   
-* Booking modal steps:   
+* Booking modal steps:  
     1. Select date/time.  
     2. Enter details (guest: email/name).  
     3. Payment method (Stripe checkout).  
@@ -2140,7 +2140,7 @@ Defined in /docs/DESIGN-SYSTEM.md.
   
   
 * Error messages: short, actionable.  
-* Empty states must suggest next action.   
+* Empty states must suggest next action.  
     * Example: “No bookings yet. Create a service to get started.”  
 *   
 * Loading states: skeleton loaders, not spinners.  
