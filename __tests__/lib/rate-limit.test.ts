@@ -41,13 +41,12 @@ describe('Rate Limiting', () => {
   });
 
   describe('checkRateLimit', () => {
-    it('should correctly check if rate limit would be exceeded', () => {
-      const config = RATE_LIMIT_CONFIGS.payment;
+    it('should correctly check if rate limit would be exceeded', async () => {
       const identifier = 'test-user-123';
       
-      // Should return true for first check
-      const firstCheck = checkRateLimit(identifier, config);
-      expect(firstCheck).toBe(true);
+      // Should return success for first check
+      const firstCheck = await checkRateLimit(identifier, 'payment');
+      expect(firstCheck.success).toBe(true);
     });
   });
 });

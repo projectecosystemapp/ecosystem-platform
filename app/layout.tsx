@@ -8,6 +8,9 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
+// Initialize application (validate environment, setup monitoring, etc.)
+import "@/lib/init";
+
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {

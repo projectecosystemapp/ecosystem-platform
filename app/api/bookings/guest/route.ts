@@ -13,6 +13,7 @@ import { withRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limit";
 import { createMarketplacePaymentIntent } from "@/lib/stripe";
 import { z } from "zod";
 import { calculatePlatformFees } from "@/lib/config/platform-fees";
+import { Sanitize } from "@/lib/security/sanitization";
 
 // Guest information schema
 const guestInfoSchema = z.object({
@@ -46,6 +47,18 @@ export const POST = withRateLimit(
           { error: "Guest information is required for guest checkout" },
           { status: 400 }
         );
+      }
+      
+      // Sanitize guest info if present
+      if (!isAuthenticated && body.guestInfo) {
+        const sanitizedGuestInfo = Sanitize.guestInfo(body.guestInfo);
+        if (!sanitizedGuestInfo) {
+          return NextResponse.json(
+            { error: "Invalid guest information provided" },
+            { status: 400 }
+          );
+        }
+        body.guestInfo = sanitizedGuestInfo;
       }
 
       const validation = validateBookingRequest(guestBookingSchema, body);
@@ -156,19 +169,23 @@ export const POST = withRateLimit(
       // Prepare customer identifier
       const customerId = isAuthenticated ? userId : `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Store guest info in customer notes if guest checkout
-      const customerNotes = (bookingData as any).customerNotes || "";
-      const enhancedCustomerNotes = !isAuthenticated && (bookingData as any).guestInfo
-        ? `${customerNotes}\n\nGuest Info:\nName: ${(bookingData as any).guestInfo.firstName} ${(bookingData as any).guestInfo.lastName}\nEmail: ${(bookingData as any).guestInfo.email}\nPhone: ${(bookingData as any).guestInfo.phone}`
-        : customerNotes;
+      // Sanitize customer notes and guest info
+      const customerNotes = Sanitize.text((bookingData as any).customerNotes || "");
+      let enhancedCustomerNotes = customerNotes;
+      
+      if (!isAuthenticated && (bookingData as any).guestInfo) {
+        const guestInfo = (bookingData as any).guestInfo;
+        // Use already sanitized guest info
+        enhancedCustomerNotes = `${customerNotes}\n\nGuest Info:\nName: ${guestInfo.firstName} ${guestInfo.lastName}\nEmail: ${guestInfo.email}\nPhone: ${guestInfo.phone}`;
+      }
 
       // Create booking record
       const [newBooking] = await db
         .insert(bookingsTable)
         .values({
-          providerId: (bookingData as any).providerId,
+          providerId: Sanitize.uuid((bookingData as any).providerId),
           customerId: customerId,
-          serviceName: (bookingData as any).serviceName,
+          serviceName: Sanitize.text((bookingData as any).serviceName),
           servicePrice: ((bookingData as any).servicePrice || 0).toString(),
           serviceDuration: (bookingData as any).serviceDuration,
           bookingDate: new Date((bookingData as any).bookingDate),
@@ -195,13 +212,14 @@ export const POST = withRateLimit(
           isGuest: (!isAuthenticated).toString()
         };
 
-        // Add guest info to metadata only if present
+        // Add sanitized guest info to metadata only if present
         if (!isAuthenticated && (bookingData as any).guestInfo) {
-          if ((bookingData as any).guestInfo.email) {
-            metadata.guestEmail = (bookingData as any).guestInfo.email;
+          const guestInfo = (bookingData as any).guestInfo;
+          if (guestInfo.email) {
+            metadata.guestEmail = guestInfo.email; // Already sanitized
           }
-          if ((bookingData as any).guestInfo.firstName && (bookingData as any).guestInfo.lastName) {
-            metadata.guestName = `${(bookingData as any).guestInfo.firstName} ${(bookingData as any).guestInfo.lastName}`;
+          if (guestInfo.firstName && guestInfo.lastName) {
+            metadata.guestName = `${guestInfo.firstName} ${guestInfo.lastName}`; // Already sanitized
           }
         }
 

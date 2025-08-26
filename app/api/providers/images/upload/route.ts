@@ -28,7 +28,7 @@ import {
 } from '@/lib/supabase/storage-helpers'
 import { createClient } from '@/lib/supabase/server'
 import { createSecureApiHandler } from '@/lib/security/api-handler'
-import { rateLimit } from '@/lib/rate-limit'
+import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 // Request validation schema
 const UploadRequestSchema = z.object({
@@ -66,22 +66,29 @@ async function handleImageUpload(req: NextRequest) {
       )
     }
 
-    // Rate limiting disabled temporarily due to type issues
-    // TODO: Fix rate limiting implementation
-    // const rateLimitResult = await rateLimit.check(userId, 'image-upload', {
-    //   limit: 10,
-    //   window: 60,
-    // })
+    // Apply rate limiting for image uploads
+    const rateLimitResult = await checkRateLimit(
+      `user:${userId}`,
+      'api'  // Using the api rate limit config (100 requests per minute)
+    )
 
-    // if (!rateLimitResult.success) {
-    //   return NextResponse.json(
-    //     { 
-    //       error: 'Rate limit exceeded',
-    //       retryAfter: rateLimitResult.reset,
-    //     },
-    //     { status: 429 }
-    //   )
-    // }
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { 
+          error: 'Rate limit exceeded. Too many upload requests.',
+          retryAfter: rateLimitResult.retryAfter,
+        },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': rateLimitResult.retryAfter?.toString() || '60',
+            'X-RateLimit-Limit': rateLimitResult.limit.toString(),
+            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+            'X-RateLimit-Reset': new Date(rateLimitResult.reset).toISOString(),
+          }
+        }
+      )
+    }
 
     // Parse multipart form data
     const formData = await req.formData()
@@ -250,15 +257,31 @@ async function handleImageUpload(req: NextRequest) {
 // Export route handler directly (security wrapper has type issues)
 export const POST = handleImageUpload
 
-// OPTIONS handler for CORS
+// OPTIONS handler for CORS with specific allowed origins
 export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin')
+  const allowedOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://ecosystem-platform.com',
+    // Add your production domains here
+  ].filter(Boolean)
+  
+  const corsHeaders: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token',
+    'Access-Control-Max-Age': '86400',
+  }
+  
+  // Only set origin if it's in the allowed list
+  if (origin && allowedOrigins.includes(origin)) {
+    corsHeaders['Access-Control-Allow-Origin'] = origin
+    corsHeaders['Access-Control-Allow-Credentials'] = 'true'
+  }
+  
   return new NextResponse(null, {
     status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
+    headers: corsHeaders,
   })
 }

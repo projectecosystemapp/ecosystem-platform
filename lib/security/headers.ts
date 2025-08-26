@@ -6,20 +6,30 @@
  */
 
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+/**
+ * Generate a secure nonce for CSP
+ */
+export function generateCSPNonce(): string {
+  return crypto.randomBytes(16).toString('base64');
+}
 
 /**
  * Content Security Policy directives
  * Configured for Clerk, Stripe, Supabase, and other third-party services
  */
-export function getCSPDirectives(): string {
+export function getCSPDirectives(nonce?: string): string {
   const isDev = process.env.NODE_ENV === 'development';
   
   const directives = {
     'default-src': ["'self'"],
     'script-src': [
       "'self'",
-      // 'unsafe-inline', // TODO: Remove this in production by using nonces or external scripts
-      // 'unsafe-eval', // TODO: Remove this in production by using webpack config or external scripts
+      // Use nonce-based CSP in production, allow unsafe-inline only in dev
+      nonce ? `'nonce-${nonce}'` : (isDev ? "'unsafe-inline'" : "'none'"),
+      // Only allow unsafe-eval in development
+      isDev && "'unsafe-eval'",
       'https://js.stripe.com',
       'https://checkout.stripe.com',
       'https://clerk.ecosystem-platform.com',
@@ -29,7 +39,8 @@ export function getCSPDirectives(): string {
     ].filter(Boolean),
     'style-src': [
       "'self'",
-      // 'unsafe-inline', // TODO: Remove this in production by using external stylesheets or nonces
+      // Use nonce-based CSP for styles in production
+      nonce ? `'nonce-${nonce}'` : (isDev ? "'unsafe-inline'" : "'none'"),
       'https://fonts.googleapis.com',
       'https://clerk.ecosystem-platform.com',
       'https://*.clerk.accounts.dev',
@@ -98,9 +109,9 @@ export function getCSPDirectives(): string {
 /**
  * Apply comprehensive security headers to response
  */
-export function applySecurityHeaders(response: NextResponse): NextResponse {
-  // Content Security Policy
-  const csp = getCSPDirectives();
+export function applySecurityHeaders(response: NextResponse, nonce?: string): NextResponse {
+  // Content Security Policy with nonce support
+  const csp = getCSPDirectives(nonce);
   response.headers.set('Content-Security-Policy', csp);
   
   // Strict Transport Security (HSTS)

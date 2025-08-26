@@ -26,6 +26,7 @@ import {
   csrfCookieOptions 
 } from "@/lib/security/csrf";
 import { rateLimit, getRateLimitConfig } from "@/lib/security/rate-limit";
+import { generateNonce, generateCSPHeader } from "@/lib/security/csp-nonce";
 
 // Route matchers for different protection levels
 const isProtectedRoute = createRouteMatcher([
@@ -65,8 +66,12 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   const pathname = req.nextUrl.pathname;
   const method = req.method;
   
-  // Create response
+  // Generate CSP nonce for this request
+  const nonce = generateNonce();
+  
+  // Create response with nonce header
   let response = NextResponse.next();
+  response.headers.set('x-csp-nonce', nonce);
   
   // Step 1: Apply rate limiting (except for webhooks)
   if (!isWebhookRoute(req)) {
@@ -165,8 +170,14 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
     response.headers.set(key, value);
   });
   
-  // Step 6: Apply comprehensive security headers
-  response = applySecurityHeaders(response);
+  // Step 6: Apply comprehensive security headers with nonce
+  response = applySecurityHeaders(response, nonce);
+  
+  // Set CSP header with nonce for production
+  if (process.env.NODE_ENV === 'production' || process.env.ENABLE_CSP === 'true') {
+    const cspHeader = generateCSPHeader(nonce);
+    response.headers.set('Content-Security-Policy', cspHeader);
+  }
   
   // Step 7: Apply CORS headers for API routes
   if (pathname.startsWith('/api/')) {

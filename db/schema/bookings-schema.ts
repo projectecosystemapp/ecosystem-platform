@@ -104,6 +104,7 @@ export const transactionsTable = pgTable("transactions", {
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   platformFee: numeric("platform_fee", { precision: 10, scale: 2 }).notNull(),
   providerPayout: numeric("provider_payout", { precision: 10, scale: 2 }).notNull(),
+  refundAmount: numeric("refund_amount", { precision: 10, scale: 2 }),
   
   // Status
   status: text("status", { 

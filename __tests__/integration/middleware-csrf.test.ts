@@ -35,10 +35,11 @@ describe('Middleware CSRF Protection', () => {
     const req = new NextRequest('http://localhost/dashboard', { method: 'GET' });
     const res = NextResponse.next();
 
-    const response = await middleware(jest.fn() as any, req);
+    const response = await middleware(req);
 
-    expect(response.status).toBe(200);
-    const setCookieHeader = response.headers.get('set-cookie');
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(200);
+    const setCookieHeader = response?.headers.get('set-cookie');
     expect(setCookieHeader).toBeDefined();
     expect(setCookieHeader).toContain(csrfCookieOptions.name);
 
@@ -54,10 +55,11 @@ describe('Middleware CSRF Protection', () => {
     });
     const res = NextResponse.next();
 
-    const response = await middleware(jest.fn() as any, req);
+    const response = await middleware(req);
 
-    expect(response.status).toBe(200);
-    const setCookieHeader = response.headers.get('set-cookie');
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(200);
+    const setCookieHeader = response?.headers.get('set-cookie');
     expect(setCookieHeader).toBeNull(); // No new cookie should be set
   });
 
@@ -74,19 +76,21 @@ describe('Middleware CSRF Protection', () => {
     });
     const res = NextResponse.next();
 
-    const response = await middleware(jest.fn() as any, req);
+    const response = await middleware(req);
 
-    expect(response.status).toBe(200);
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(200);
   });
 
   it('should block POST requests if CSRF cookie is missing', async () => {
     const req = new NextRequest('http://localhost/api/bookings', { method: 'POST' });
     const res = NextResponse.next();
 
-    const response = await middleware(jest.fn() as any, req);
+    const response = await middleware(req);
 
-    expect(response.status).toBe(403);
-    expect(await response.text()).toBe('CSRF token missing');
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(403);
+    expect(response ? await response.text() : '').toBe('CSRF token missing');
   });
 
   it('should block POST requests if CSRF header is missing', async () => {
@@ -99,10 +103,11 @@ describe('Middleware CSRF Protection', () => {
     });
     const res = NextResponse.next();
 
-    const response = await middleware(jest.fn() as any, req);
+    const response = await middleware(req);
 
-    expect(response.status).toBe(403);
-    expect(await response.text()).toBe('CSRF token header missing');
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(403);
+    expect(response ? await response.text() : '').toBe('CSRF token header missing');
   });
 
   it('should block POST requests if CSRF token is invalid', async () => {
@@ -119,31 +124,35 @@ describe('Middleware CSRF Protection', () => {
     });
     const res = NextResponse.next();
 
-    const response = await middleware(jest.fn() as any, req);
+    const response = await middleware(req);
 
-    expect(response.status).toBe(403);
-    expect(await response.text()).toBe('Invalid CSRF token');
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(403);
+    expect(response ? await response.text() : '').toBe('Invalid CSRF token');
   });
 
   it('should skip CSRF protection for specified paths (e.g., webhooks)', async () => {
     const req = new NextRequest('http://localhost/api/stripe/webhooks', { method: 'POST' });
     const res = NextResponse.next();
 
-    const response = await middleware(jest.fn() as any, req);
+    const response = await middleware(req);
 
-    expect(response.status).toBe(200); // Should not be 403
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(200); // Should not be 403
     expect(await response.text()).not.toBe('CSRF token missing');
   });
 
   it('should not apply CSRF protection for safe methods (HEAD, OPTIONS)', async () => {
     const reqHead = new NextRequest('http://localhost/api/bookings', { method: 'HEAD' });
     const resHead = NextResponse.next();
-    const responseHead = await middleware(jest.fn() as any, reqHead);
-    expect(responseHead.status).toBe(200);
+    const responseHead = await middleware(reqHead);
+    expect(responseHead).toBeDefined();
+    expect(responseHead?.status).toBe(200);
 
     const reqOptions = new NextRequest('http://localhost/api/bookings', { method: 'OPTIONS' });
     const resOptions = NextResponse.next();
-    const responseOptions = await middleware(jest.fn() as any, reqOptions);
-    expect(responseOptions.status).toBe(200);
+    const responseOptions = await middleware(reqOptions);
+    expect(responseOptions).toBeDefined();
+    expect(responseOptions?.status).toBe(200);
   });
 });

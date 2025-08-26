@@ -9,3 +9,5 @@ export * from "./spaces-schema";
 export * from "./things-schema";
 export * from "./location-cache-schema";
 export * from "./email-logs-schema";
+export * from "./categories-schema";
+export * from "./enhanced-booking-schema";

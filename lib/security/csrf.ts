@@ -10,13 +10,23 @@ import crypto from 'crypto';
 // CSRF token configuration
 const CSRF_TOKEN_LENGTH = 32;
 
-// Require CSRF_SECRET from environment
+// Require CSRF_SECRET from environment - CRITICAL for security
 const CSRF_SECRET = process.env.CSRF_SECRET;
-if (!CSRF_SECRET || CSRF_SECRET.length < 32) {
-  throw new Error(
-    'CSRF_SECRET environment variable is required and must be at least 32 characters. ' +
+
+// In production, enforce CSRF_SECRET strictly
+if (process.env.NODE_ENV === 'production') {
+  if (!CSRF_SECRET || CSRF_SECRET.length < 32) {
+    console.error('FATAL: CSRF_SECRET is not properly configured in production');
+    process.exit(1); // Terminate the application
+  }
+} else if (!CSRF_SECRET) {
+  // In development, provide a warning but use a default
+  console.warn(
+    '⚠️  WARNING: CSRF_SECRET not set. Using default for development only. ' +
     'Generate one with: openssl rand -hex 32'
   );
+  // Use a development-only default (NEVER use in production)
+  process.env.CSRF_SECRET = 'development-only-secret-do-not-use-in-production';
 }
 
 const CSRF_COOKIE_NAME = '__Host-csrf-token';
@@ -36,7 +46,7 @@ export function createSignedToken(token: string): string {
   const timestamp = Date.now();
   const data = `${token}.${timestamp}`;
   const signature = crypto
-    .createHmac('sha256', CSRF_SECRET)
+    .createHmac('sha256', process.env.CSRF_SECRET!)
     .update(data)
     .digest('hex');
   return `${data}.${signature}`;
@@ -55,7 +65,7 @@ export function verifySignedToken(signedToken: string, maxAge: number = 86400000
     
     // Verify signature with constant-time comparison
     const expectedSignature = crypto
-      .createHmac('sha256', CSRF_SECRET)
+      .createHmac('sha256', process.env.CSRF_SECRET!)
       .update(data)
       .digest('hex');
     

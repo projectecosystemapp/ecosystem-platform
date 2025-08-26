@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { db } from "@/db/db";
-import { bookingsTable } from "@/db/schema/bookings-schema";
-import { providersTable } from "@/db/schema/providers-schema";
-import { customersTable } from "@/db/schema/customers-schema";
+import { db } from "@/lib/db";
+import { bookingsTable } from "@/lib/db/schema/bookings-schema";
+import { providersTable } from "@/lib/db/schema/providers-schema";
+import { customersTable } from "@/lib/db/schema/customers-schema";
 import { eq } from "drizzle-orm";
 import { generateConfirmationCode } from "@/lib/utils";
 import { calculateFees } from "@/lib/payments/fee-calculator";
