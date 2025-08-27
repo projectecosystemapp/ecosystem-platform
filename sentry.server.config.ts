@@ -3,17 +3,32 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN,
   
-  // Performance Monitoring
+  // Performance Monitoring (required for AI monitoring)
   tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
   
   // Environment
   environment: process.env.NODE_ENV,
+  
+  // Integrations
+  integrations: [
+    // Vercel AI SDK integration for agent monitoring
+    Sentry.vercelAIIntegration({
+      recordInputs: true,  // Record AI prompts/inputs
+      recordOutputs: true, // Record AI responses/outputs
+    }),
+  ],
+  
+  // Enable PII for AI context (be cautious in production)
+  sendDefaultPii: process.env.NODE_ENV === "development",
   
   // Error Filtering
   ignoreErrors: [
     // Ignore expected errors
     "Unauthorized",
     "User not found",
+    // AI-specific errors to ignore
+    "AI rate limit exceeded",
+    "Model temporarily unavailable",
   ],
   
   // Before sending errors

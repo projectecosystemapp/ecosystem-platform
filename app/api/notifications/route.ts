@@ -17,14 +17,14 @@ const sendNotificationSchema = z.object({
   type: z.string(),
   title: z.string(),
   body: z.string(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   channels: z.array(z.enum(['email', 'in_app', 'sms', 'push'])).optional(),
   actionUrl: z.string().url().optional(),
   actionText: z.string().optional(),
   imageUrl: z.string().url().optional(),
   templateCode: z.string().optional(),
-  templateData: z.record(z.any()).optional(),
+  templateData: z.record(z.string(), z.any()).optional(),
 });
 
 const updatePreferencesSchema = z.object({

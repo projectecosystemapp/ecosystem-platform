@@ -5,6 +5,7 @@ import { providersTable } from "@/db/schema/providers-schema";
 import { bookingsTable } from "@/db/schema/bookings-schema";
 import { paymentsTable } from "@/db/schema/payments-schema";
 import { reviewsTable } from "@/db/schema/reviews-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eventsTable } from "@/db/schema/events-schema";
 import { spacesTable } from "@/db/schema/spaces-schema";
 import { thingsTable } from "@/db/schema/things-schema";
@@ -36,16 +37,17 @@ async function getProviderAnalytics(providerId: string) {
   const weekStart = startOfWeek(now);
   const weekEnd = endOfWeek(now);
 
-  // Overall earnings
+  // Overall earnings - join with bookings to get providerId
   const [totalEarnings] = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${paymentsTable.providerAmount}), 0)::numeric`,
+      total: sql<number>`COALESCE(SUM(${paymentsTable.providerPayoutCents} / 100.0), 0)::numeric`,
       count: count(),
     })
     .from(paymentsTable)
+    .innerJoin(bookingsTable, eq(paymentsTable.bookingId, bookingsTable.id))
     .where(
       and(
-        eq(paymentsTable.providerId, providerId),
+        eq(bookingsTable.providerId, providerId),
         eq(paymentsTable.status, "succeeded")
       )
     );
@@ -53,13 +55,14 @@ async function getProviderAnalytics(providerId: string) {
   // Last 30 days earnings
   const [monthlyEarnings] = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${paymentsTable.providerAmount}), 0)::numeric`,
+      total: sql<number>`COALESCE(SUM(${paymentsTable.providerPayoutCents} / 100.0), 0)::numeric`,
       count: count(),
     })
     .from(paymentsTable)
+    .innerJoin(bookingsTable, eq(paymentsTable.bookingId, bookingsTable.id))
     .where(
       and(
-        eq(paymentsTable.providerId, providerId),
+        eq(bookingsTable.providerId, providerId),
         eq(paymentsTable.status, "succeeded"),
         gte(paymentsTable.createdAt, thirtyDaysAgo)
       )
@@ -68,13 +71,14 @@ async function getProviderAnalytics(providerId: string) {
   // This week's earnings
   const [weeklyEarnings] = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${paymentsTable.providerAmount}), 0)::numeric`,
+      total: sql<number>`COALESCE(SUM(${paymentsTable.providerPayoutCents} / 100.0), 0)::numeric`,
       count: count(),
     })
     .from(paymentsTable)
+    .innerJoin(bookingsTable, eq(paymentsTable.bookingId, bookingsTable.id))
     .where(
       and(
-        eq(paymentsTable.providerId, providerId),
+        eq(bookingsTable.providerId, providerId),
         eq(paymentsTable.status, "succeeded"),
         gte(paymentsTable.createdAt, weekStart)
       )
@@ -98,7 +102,7 @@ async function getProviderAnalytics(providerId: string) {
   // Popular listings (most booked)
   const popularServices = await db
     .select({
-      serviceType: bookingsTable.serviceType,
+      serviceType: bookingsTable.serviceName,
       count: count(),
       totalRevenue: sql<number>`COALESCE(SUM(${bookingsTable.totalAmount}), 0)::numeric`,
     })
@@ -106,28 +110,29 @@ async function getProviderAnalytics(providerId: string) {
     .where(
       and(
         eq(bookingsTable.providerId, providerId),
-        eq(bookingsTable.status, 'COMPLETED'),
+        eq(bookingsTable.status, 'completed'),
         gte(bookingsTable.createdAt, thirtyDaysAgo)
       )
     )
-    .groupBy(bookingsTable.serviceType)
+    .groupBy(bookingsTable.serviceName)
     .orderBy(desc(count()))
     .limit(5);
 
   // Customer demographics (returning vs new)
   const customerStats = await db
     .select({
-      customerEmail: bookingsTable.customerEmail,
+      customerEmail: sql<string>`COALESCE(${bookingsTable.guestEmail}, profiles.email)`,
       bookingCount: count(),
     })
     .from(bookingsTable)
+    .leftJoin(profilesTable, eq(bookingsTable.customerId, profilesTable.userId))
     .where(
       and(
         eq(bookingsTable.providerId, providerId),
         gte(bookingsTable.createdAt, ninetyDaysAgo)
       )
     )
-    .groupBy(bookingsTable.customerEmail);
+    .groupBy(sql`COALESCE(${bookingsTable.guestEmail}, profiles.email)`);
 
   const returningCustomers = customerStats.filter(c => c.bookingCount > 1).length;
   const uniqueCustomers = customerStats.length;
@@ -135,7 +140,7 @@ async function getProviderAnalytics(providerId: string) {
   // Peak booking times (hour of day)
   const bookingsByHour = await db
     .select({
-      hour: sql<number>`EXTRACT(HOUR FROM ${bookingsTable.scheduledFor})`,
+      hour: sql<number>`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`,
       count: count(),
     })
     .from(bookingsTable)
@@ -145,13 +150,13 @@ async function getProviderAnalytics(providerId: string) {
         gte(bookingsTable.createdAt, thirtyDaysAgo)
       )
     )
-    .groupBy(sql`EXTRACT(HOUR FROM ${bookingsTable.scheduledFor})`)
-    .orderBy(sql`EXTRACT(HOUR FROM ${bookingsTable.scheduledFor})`);
+    .groupBy(sql`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`)
+    .orderBy(sql`EXTRACT(HOUR FROM ${bookingsTable.bookingDate})`);
 
   // Day of week analysis
   const bookingsByDayOfWeek = await db
     .select({
-      dayOfWeek: sql<number>`EXTRACT(DOW FROM ${bookingsTable.scheduledFor})`,
+      dayOfWeek: sql<number>`EXTRACT(DOW FROM ${bookingsTable.bookingDate})`,
       count: count(),
     })
     .from(bookingsTable)
@@ -161,8 +166,8 @@ async function getProviderAnalytics(providerId: string) {
         gte(bookingsTable.createdAt, thirtyDaysAgo)
       )
     )
-    .groupBy(sql`EXTRACT(DOW FROM ${bookingsTable.scheduledFor})`)
-    .orderBy(sql`EXTRACT(DOW FROM ${bookingsTable.scheduledFor})`);
+    .groupBy(sql`EXTRACT(DOW FROM ${bookingsTable.bookingDate})`)
+    .orderBy(sql`EXTRACT(DOW FROM ${bookingsTable.bookingDate})`);
 
   // Reviews and ratings
   const reviews = await db
@@ -182,12 +187,13 @@ async function getProviderAnalytics(providerId: string) {
   const dailyEarnings = await db
     .select({
       date: sql<string>`DATE(${paymentsTable.createdAt})`,
-      amount: sql<number>`COALESCE(SUM(${paymentsTable.providerAmount}), 0)::numeric`,
+      amount: sql<number>`COALESCE(SUM(${paymentsTable.providerPayoutCents} / 100.0), 0)::numeric`,
     })
     .from(paymentsTable)
+    .innerJoin(bookingsTable, eq(paymentsTable.bookingId, bookingsTable.id))
     .where(
       and(
-        eq(paymentsTable.providerId, providerId),
+        eq(bookingsTable.providerId, providerId),
         eq(paymentsTable.status, "succeeded"),
         gte(paymentsTable.createdAt, thirtyDaysAgo)
       )
@@ -199,7 +205,7 @@ async function getProviderAnalytics(providerId: string) {
   const conversionStats = await db
     .select({
       total: count(),
-      accepted: sql<number>`COUNT(CASE WHEN ${bookingsTable.status} NOT IN ('REJECTED', 'CANCELLED') THEN 1 END)`,
+      accepted: sql<number>`COUNT(CASE WHEN ${bookingsTable.status} NOT IN ('cancelled', 'no_show') THEN 1 END)`,
     })
     .from(bookingsTable)
     .where(

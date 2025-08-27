@@ -31,7 +31,7 @@ const earnPointsBonusSchema = z.object({
   reason: z.enum(["review", "birthday", "milestone", "campaign", "manual"]),
   points: z.number().int().positive("Points must be positive"),
   description: z.string().max(500),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 const earnPointsSchema = z.discriminatedUnion("type", [

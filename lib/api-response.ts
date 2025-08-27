@@ -56,7 +56,7 @@ export function errorResponse(
 export function validationErrorResponse(
   error: ZodError
 ): NextResponse<ApiResponse<never>> {
-  const details = error.errors.reduce((acc, err) => {
+  const details = error.issues.reduce((acc, err) => {
     const path = err.path.join('.');
     acc[path] = err.message;
     return acc;

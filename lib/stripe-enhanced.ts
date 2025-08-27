@@ -13,7 +13,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20" as any,
+  apiVersion: "2025-07-30.basil" as any,
   appInfo: {
     name: "Ecosystem Marketplace",
     version: "1.0.0",

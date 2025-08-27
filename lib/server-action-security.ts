@@ -240,12 +240,12 @@ export async function withSecureAction<T, R>(
             ipAddress,
             userAgent,
             success: false,
-            details: { errors: error.errors },
+            details: { errors: error.issues },
           });
           
           return {
             success: false,
-            error: `Validation error: ${error.errors
+            error: `Validation error: ${error.issues
               .map((e) => e.message)
               .join(", ")}`,
           };

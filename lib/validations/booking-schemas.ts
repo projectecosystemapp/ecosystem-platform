@@ -246,7 +246,7 @@ export const createPaymentIntentSchema = z.object({
   
   customerId: z.string().optional(),
   
-  metadata: z.record(z.string()).optional()
+  metadata: z.record(z.string(), z.string()).optional()
 });
 
 // Refund schema
@@ -266,7 +266,7 @@ export const createRefundSchema = z.object({
     "no_show"
   ]).default("requested_by_customer"),
   
-  metadata: z.record(z.string()).optional()
+  metadata: z.record(z.string(), z.string()).optional()
 });
 
 // Webhook validation schema
@@ -274,7 +274,7 @@ export const webhookEventSchema = z.object({
   id: z.string(),
   type: z.string(),
   data: z.object({
-    object: z.record(z.any())
+    object: z.record(z.string(), z.any())
   }),
   created: z.number(),
   livemode: z.boolean()
@@ -302,7 +302,7 @@ export function validateBookingRequest<T>(
 export function formatValidationErrors(error: z.ZodError) {
   return {
     message: "Validation failed",
-    errors: error.errors.map(err => ({
+    errors: error.issues.map((err: any) => ({
       field: err.path.join('.'),
       message: err.message,
       code: err.code

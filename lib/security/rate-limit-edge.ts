@@ -32,13 +32,13 @@ export const rateLimitConfigs = {
 } as const;
 
 /**
- * Create rate limiter instance
+ * Create rate limiter instances for different endpoints
  */
-function createRateLimiter() {
+function createRateLimiters() {
   // Check if Upstash credentials are available (for Edge Runtime)
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     // In middleware, we can't use Redis Cloud (ioredis) as it's not Edge-compatible
-    console.warn('Upstash Redis not configured for Edge Runtime rate limiting');
+    console.warn('⚠️ Upstash Redis not configured for Edge Runtime rate limiting - using in-memory fallback');
     return null;
   }
 
@@ -48,20 +48,50 @@ function createRateLimiter() {
       token: process.env.UPSTASH_REDIS_REST_TOKEN,
     });
 
-    return new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(10, '10 s'),
-      analytics: true,
-      prefix: 'ecosystem-ratelimit',
-    });
+    console.log('✅ Upstash Redis configured for Edge Runtime rate limiting');
+
+    // Create different rate limiters for different use cases
+    return {
+      // Standard API rate limiter: 100 requests per minute
+      api: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(100, '60 s'),
+        analytics: true,
+        prefix: 'edge-api',
+      }),
+      
+      // Strict rate limiter for auth/payment: 5 requests per minute
+      strict: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, '60 s'),
+        analytics: true,
+        prefix: 'edge-strict',
+      }),
+      
+      // Search rate limiter: 30 requests per minute
+      search: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(30, '60 s'),
+        analytics: true,
+        prefix: 'edge-search',
+      }),
+      
+      // Page rate limiter: 60 requests per minute
+      page: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(60, '60 s'),
+        analytics: true,
+        prefix: 'edge-page',
+      }),
+    };
   } catch (error) {
-    console.error('Failed to initialize Upstash rate limiter:', error);
+    console.error('❌ Failed to initialize Upstash rate limiter:', error);
     return null;
   }
 }
 
-// Initialize rate limiter
-const rateLimiter = createRateLimiter();
+// Initialize rate limiters
+const rateLimiters = createRateLimiters();
 
 /**
  * In-memory rate limit fallback
@@ -151,9 +181,21 @@ export async function rateLimit(
   const headers = new Headers();
 
   try {
-    if (rateLimiter) {
+    if (rateLimiters) {
+      // Select appropriate rate limiter based on request type
+      const pathname = request.nextUrl.pathname;
+      let limiter = rateLimiters.api; // Default
+      
+      if (pathname.includes('/auth') || pathname.includes('/payment') || pathname.includes('/stripe')) {
+        limiter = rateLimiters.strict;
+      } else if (pathname.includes('/search')) {
+        limiter = rateLimiters.search;
+      } else if (!pathname.startsWith('/api/')) {
+        limiter = rateLimiters.page;
+      }
+      
       // Use Upstash-based rate limiting (Edge-compatible)
-      const result = await rateLimiter.limit(identifier);
+      const result = await limiter.limit(identifier);
       
       headers.set('X-RateLimit-Limit', config.requests.toString());
       headers.set('X-RateLimit-Remaining', result.remaining.toString());

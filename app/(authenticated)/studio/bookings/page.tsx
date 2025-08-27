@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/db";
 import { providersTable } from "@/db/schema/providers-schema";
 import { bookingsTable } from "@/db/schema/bookings-schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { BookingsCalendar } from "@/components/studio/BookingsCalendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,21 +16,22 @@ async function getProviderBookings(providerId: string, startDate: Date, endDate:
   const bookings = await db
     .select({
       id: bookingsTable.id,
-      customerName: bookingsTable.customerName,
-      customerEmail: bookingsTable.customerEmail,
-      serviceType: bookingsTable.serviceType,
-      scheduledFor: bookingsTable.scheduledFor,
-      duration: bookingsTable.duration,
+      customerName: sql<string>`COALESCE(profiles.email, ${bookingsTable.guestEmail})`,
+      customerEmail: sql<string>`COALESCE(profiles.email, ${bookingsTable.guestEmail})`,
+      serviceType: bookingsTable.serviceName,
+      scheduledFor: bookingsTable.bookingDate,
+      duration: bookingsTable.serviceDuration,
       status: bookingsTable.status,
       totalAmount: bookingsTable.totalAmount,
-      notes: bookingsTable.notes,
+      notes: bookingsTable.customerNotes,
     })
     .from(bookingsTable)
+    .leftJoin(profilesTable, eq(bookingsTable.customerId, profilesTable.userId))
     .where(
       and(
         eq(bookingsTable.providerId, providerId),
-        gte(bookingsTable.scheduledFor, startDate),
-        lte(bookingsTable.scheduledFor, endDate)
+        gte(bookingsTable.bookingDate, startDate),
+        lte(bookingsTable.bookingDate, endDate)
       )
     );
 
@@ -63,16 +65,16 @@ export default async function BookingsPage() {
   // Group bookings by status for stats
   const bookingStats = {
     upcoming: bookings.filter(b => 
-      ['ACCEPTED', 'PAYMENT_SUCCEEDED'].includes(b.status) && 
+      ['confirmed'].includes(b.status) && 
       new Date(b.scheduledFor) > now
     ).length,
     today: bookings.filter(b => {
       const bookingDate = new Date(b.scheduledFor);
       return bookingDate.toDateString() === now.toDateString();
     }).length,
-    completed: bookings.filter(b => b.status === 'COMPLETED').length,
+    completed: bookings.filter(b => b.status === 'completed').length,
     cancelled: bookings.filter(b => 
-      ['CANCELLED', 'REJECTED'].includes(b.status)
+      ['cancelled', 'no_show'].includes(b.status)
     ).length,
   };
 
@@ -201,10 +203,10 @@ export default async function BookingsPage() {
                             {new Date(booking.scheduledFor).toLocaleTimeString()}
                           </p>
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                            booking.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                            booking.status === 'PAYMENT_SUCCEEDED' ? 'bg-blue-100 text-blue-800' :
-                            booking.status === 'ACCEPTED' ? 'bg-yellow-100 text-yellow-800' :
-                            booking.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                            booking.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            booking.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                            booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
                             {booking.status.toLowerCase().replace(/_/g, ' ')}

@@ -263,7 +263,7 @@ export const notificationSchema = z.object({
   title: z.string().max(200),
   message: z.string().max(1000),
   read: z.boolean(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   createdAt: z.date(),
   readAt: z.date().optional(),
 });
@@ -293,7 +293,7 @@ export const errorCodeSchema = z.enum([
 export const apiErrorSchema = z.object({
   code: errorCodeSchema,
   message: z.string(),
-  details: z.record(z.any()).optional(),
+  details: z.record(z.string(), z.any()).optional(),
   timestamp: z.date(),
 });
 
@@ -350,8 +350,8 @@ export function safeParse<T>(
     return { success: true, data: result.data };
   }
   
-  const errors = result.error.errors.map(
-    (err) => `${err.path.join('.')}: ${err.message}`
+  const errors = result.error.issues.map(
+    (err: any) => `${err.path.join('.')}: ${err.message}`
   );
   
   return { success: false, errors };

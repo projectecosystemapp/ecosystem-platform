@@ -170,7 +170,7 @@ export async function setWeeklySchedule(
   } catch (error) {
     console.error("Error setting weekly schedule:", error);
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors.map(e => e.message).join(", ")}`);
+      throw new Error(`Validation error: ${error.issues.map(e => e.message).join(", ")}`);
     }
     throw new Error("Failed to update weekly schedule");
   }
@@ -226,7 +226,7 @@ export async function blockTimeSlot(
   } catch (error) {
     console.error("Error blocking time slot:", error);
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors.map(e => e.message).join(", ")}`);
+      throw new Error(`Validation error: ${error.issues.map(e => e.message).join(", ")}`);
     }
     throw new Error("Failed to block time slot");
   }

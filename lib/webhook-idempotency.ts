@@ -35,16 +35,17 @@ export async function checkWebhookIdempotency(
 
     if (existingEvent) {
       return {
+        success: true,
         alreadyProcessed: true,
         status: existingEvent.status as WebhookStatus,
       };
     }
 
-    return { alreadyProcessed: false };
+    return { success: true, alreadyProcessed: false };
   } catch (error) {
     console.error(`Error checking webhook idempotency for ${eventId}:`, error);
     // In case of database error, we should continue processing to avoid losing events
-    return { alreadyProcessed: false };
+    return { success: false, alreadyProcessed: false };
   }
 }
 

@@ -3,7 +3,7 @@ import { registerEventAttendance, checkEventAvailability, getEventById } from "@
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody, ApiContext } from "@/lib/security/api-handler";
-import { db } from "@/db";
+import { db } from "@/db/db";
 import { bookingsTable } from "@/db/schema/bookings-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq } from "drizzle-orm";
@@ -11,7 +11,7 @@ import { calculateFees } from "@/lib/fees";
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-11-20.acacia",
+  apiVersion: "2025-07-30.basil",
 });
 
 /**
@@ -148,7 +148,7 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
         startTime: new Date(event.startDateTime).toTimeString().slice(0, 5),
         endTime: new Date(event.endDateTime).toTimeString().slice(0, 5),
         status: availability.requiresApproval ? "pending" : "confirmed",
-        totalAmount: fees.customerTotal.toFixed(2),
+        totalAmount: fees.totalAmount.toFixed(2),
         platformFee: fees.platformFee.toFixed(2),
         providerPayout: fees.providerPayout.toFixed(2),
         confirmationCode,
@@ -171,7 +171,7 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
       try {
         // Create Stripe payment intent
         paymentIntent = await stripe.paymentIntents.create({
-          amount: Math.round(fees.customerTotal * 100), // Convert to cents
+          amount: Math.round(fees.totalAmount * 100), // Convert to cents
           currency: "usd",
           metadata: {
             bookingId: booking.id,
@@ -239,7 +239,7 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
         eventTitle: event.title,
         eventDateTime: event.startDateTime,
         numberOfGuests: body.numberOfGuests,
-        totalAmount: fees.customerTotal,
+        totalAmount: fees.totalAmount,
         requiresApproval: availability.requiresApproval,
         instantBooking: availability.instantBooking,
       },
@@ -263,7 +263,7 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
     if (paymentIntent) {
       response.payment = {
         clientSecret: paymentIntent.client_secret,
-        amount: fees.customerTotal,
+        amount: fees.totalAmount,
         currency: "usd",
         requiresAction: paymentIntent.status === "requires_action",
       };

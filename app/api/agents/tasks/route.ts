@@ -25,7 +25,7 @@ const createTaskSchema = z.object({
   description: z.string(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   requiredCapabilities: z.array(z.nativeEnum(AgentCapability)),
-  input: z.record(z.any()),
+  input: z.record(z.string(), z.any()),
   dependencies: z.array(z.string()).optional(),
   deadline: z.string().datetime().optional()
 });

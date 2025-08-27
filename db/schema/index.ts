@@ -19,3 +19,4 @@ export * from "./pricing-schema";
 export * from "./group-bookings-schema";
 export * from "./payments-schema";
 export * from "./notifications-schema";
+export * from "./audit-schema";

@@ -75,7 +75,7 @@ const createGroupBookingSchema = z.object({
   instructions: z.string().optional(),
   
   // Custom fields
-  customFields: z.record(z.any()).optional(),
+  customFields: z.record(z.string(), z.any()).optional(),
   
   // Initial participants to invite
   initialParticipants: z.array(z.object({

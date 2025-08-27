@@ -101,7 +101,7 @@ export async function setWeeklyScheduleAction(
         return {
           success: false,
           error: "Validation error",
-          details: error.errors,
+          details: error.issues,
         };
       }
       throw error;
@@ -227,7 +227,7 @@ export async function blockTimeSlotAction(
         return {
           success: false,
           error: "Validation error",
-          details: error.errors,
+          details: error.issues,
         };
       }
       throw error;

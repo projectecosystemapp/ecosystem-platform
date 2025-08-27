@@ -352,8 +352,8 @@ export class SubscriptionManager {
             reason,
             feedback,
             cancelAtPeriodEnd,
-            endDate: stripeSubscription.current_period_end 
-              ? new Date(stripeSubscription.current_period_end * 1000).toISOString()
+            endDate: (stripeSubscription as any).current_period_end 
+              ? new Date((stripeSubscription as any).current_period_end * 1000).toISOString()
               : null
           }
         });
@@ -546,7 +546,7 @@ export class SubscriptionManager {
         trialDays: plan.trialDays,
         features: plan.features,
         benefits: plan.benefits,
-        isActive: plan.isActive,
+        isActive: plan.isActive ?? false,
         availableSlots: plan.maxSubscribers 
           ? plan.maxSubscribers - (plan.currentSubscribers || 0)
           : undefined

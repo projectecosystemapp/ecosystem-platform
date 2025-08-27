@@ -55,7 +55,7 @@ function extractSchemaTypes(): void {
     const content = fs.readFileSync(filePath, 'utf-8');
     
     // Extract table definitions
-    const tableMatches = content.matchAll(/export const (\w+)Table = pgTable\((.*?)\);/gs);
+    const tableMatches = content.matchAll(/export const (\w+)Table = pgTable\(([\s\S]*?)\);/g);
     
     for (const match of tableMatches) {
       const tableName = match[1];

@@ -113,7 +113,7 @@ const createSpaceSchema = z.object({
   securityDeposit: z.number().min(0).optional(),
   
   // Availability
-  operatingHours: z.record(
+  operatingHours: z.record(z.string(),
     z.object({
       open: z.string(),
       close: z.string(),

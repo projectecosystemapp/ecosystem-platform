@@ -249,7 +249,10 @@ export async function trackSubscriptionUsage(
     const { subscription: sub, plan } = subscription[0];
 
     // Check if usage limit reached
-    if (sub.servicesUsedThisPeriod >= plan.servicesPerCycle) {
+    const servicesPerCycle = plan.servicesPerCycle ?? 0;
+    const servicesUsedThisPeriod = sub.servicesUsedThisPeriod ?? 0;
+    
+    if (servicesUsedThisPeriod >= servicesPerCycle) {
       throw new Error("Subscription usage limit reached for this period");
     }
 
@@ -275,8 +278,8 @@ export async function trackSubscriptionUsage(
 
     return {
       success: true,
-      servicesUsed: sub.servicesUsedThisPeriod + 1,
-      servicesRemaining: plan.servicesPerCycle - (sub.servicesUsedThisPeriod + 1)
+      servicesUsed: servicesUsedThisPeriod + 1,
+      servicesRemaining: servicesPerCycle - (servicesUsedThisPeriod + 1)
     };
   } catch (error) {
     console.error('Error tracking subscription usage:', error);
@@ -306,7 +309,7 @@ export async function resetPeriodUsage(subscriptionId: string) {
       periodStart: sub.currentPeriodStart!,
       periodEnd: sub.currentPeriodEnd!,
       servicesIncluded: 0, // Will be set from plan
-      servicesUsed: sub.servicesUsedThisPeriod,
+      servicesUsed: sub.servicesUsedThisPeriod ?? 0,
       servicesRemaining: 0 // Will be calculated
     });
 

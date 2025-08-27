@@ -34,7 +34,7 @@ const createSubscriptionBookingSchema = z.object({
   startTime: z.string(),
   endTime: z.string(),
   customerNotes: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 /**

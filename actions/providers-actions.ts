@@ -52,7 +52,7 @@ export async function createProviderAction(rawData: unknown): Promise<ActionResu
     if (!validationResult.success) {
       return { 
         isSuccess: false, 
-        message: "Invalid input: " + validationResult.error.errors.map(e => e.message).join(", ") 
+        message: "Invalid input: " + validationResult.error.issues.map((e: any) => e.message).join(", ") 
       };
     }
     

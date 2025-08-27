@@ -124,7 +124,7 @@ const createThingSchema = z.object({
   preferredContact: z.enum(["app", "email", "phone", "text"]).default("app"),
   
   // Additional details
-  specifications: z.record(z.any()).optional(),
+  specifications: z.record(z.string(), z.any()).optional(),
   tags: z.array(z.string()).max(10).optional(),
   yearManufactured: z.number().min(1900).max(new Date().getFullYear() + 1).optional(),
   dimensions: z.object({

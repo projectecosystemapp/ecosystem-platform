@@ -92,7 +92,7 @@ export const createCheckoutSchema = z.object({
   successUrl: urlSchema.optional(),
   cancelUrl: urlSchema.optional(),
   
-  metadata: z.record(z.string()).optional()
+  metadata: z.record(z.string(), z.string()).optional()
 });
 
 /**
@@ -315,7 +315,7 @@ export function validateRequest<T>(
   } catch (error) {
     if (error instanceof z.ZodError) {
       // Format validation errors for API response
-      const formattedErrors = error.errors.map(err => ({
+      const formattedErrors = error.issues.map((err: any) => ({
         field: err.path.join('.'),
         message: err.message
       }));

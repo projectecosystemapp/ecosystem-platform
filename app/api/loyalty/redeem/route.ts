@@ -19,7 +19,7 @@ const redeemPointsSchema = z.object({
   redemptionOptionId: z.string().uuid("Invalid redemption option ID"),
   quantity: z.number().int().positive().default(1),
   bookingId: z.string().uuid().optional(), // For discount redemptions
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 const createRedemptionOptionSchema = z.object({

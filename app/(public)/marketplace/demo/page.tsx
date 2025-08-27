@@ -283,7 +283,7 @@ const sampleListings: ListingData[] = [
       rating: 4.6,
       reviewCount: 34
     },
-    condition: "excellent",
+    condition: "like_new",
     brand: "Canon",
     negotiable: true,
     shippingAvailable: true,

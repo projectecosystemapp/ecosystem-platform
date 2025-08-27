@@ -1,12 +1,16 @@
 /**
  * Enhanced Rate Limiting Configuration
  * 
- * Provides advanced rate limiting with Redis/Upstash
- * Falls back to in-memory rate limiting if Redis is unavailable
+ * Provides advanced rate limiting with Upstash Redis
+ * Falls back to in-memory rate limiting if Upstash Redis is unavailable
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimiters, withRateLimit as withRedisRateLimit, getClientIp } from '../rate-limiter-redis-cloud';
+import { 
+  createUpstashRateLimiter, 
+  isUpstashConfigured,
+  UpstashRateLimiter 
+} from './upstash-redis';
 
 // In-memory rate limit store for fallback
 const inMemoryStore = new Map<string, { count: number; resetTime: number }>();
@@ -30,18 +34,65 @@ export const rateLimitConfigs = {
   },
 } as const;
 
-/**
- * Check if Redis Cloud is configured
- */
-function isRedisConfigured(): boolean {
-  return !!(process.env.REDIS_HOST && process.env.REDIS_PORT && process.env.REDIS_PASSWORD);
-}
+// Pre-configured Upstash rate limiters for different endpoints
+export const upstashRateLimiters = {
+  // API endpoints
+  api: createUpstashRateLimiter({
+    tokensPerInterval: 100,
+    intervalMs: 60 * 1000, // 1 minute
+    namespace: 'api',
+  }),
+  
+  search: createUpstashRateLimiter({
+    tokensPerInterval: 30,
+    intervalMs: 60 * 1000, // 1 minute
+    namespace: 'search',
+  }),
+  
+  booking: createUpstashRateLimiter({
+    tokensPerInterval: 10,
+    intervalMs: 60 * 1000, // 1 minute
+    namespace: 'booking',
+  }),
+  
+  payment: createUpstashRateLimiter({
+    tokensPerInterval: 5,
+    intervalMs: 60 * 1000, // 1 minute
+    namespace: 'payment',
+  }),
+  
+  auth: createUpstashRateLimiter({
+    tokensPerInterval: 5,
+    intervalMs: 15 * 60 * 1000, // 15 minutes
+    namespace: 'auth',
+  }),
+  
+  // Page routes
+  pages: createUpstashRateLimiter({
+    tokensPerInterval: 60,
+    intervalMs: 60 * 1000, // 1 minute
+    namespace: 'pages',
+  }),
+  
+  dashboard: createUpstashRateLimiter({
+    tokensPerInterval: 30,
+    intervalMs: 60 * 1000, // 1 minute
+    namespace: 'dashboard',
+  }),
+  
+  // Webhooks
+  webhook: createUpstashRateLimiter({
+    tokensPerInterval: 100,
+    intervalMs: 1000, // 1 second
+    namespace: 'webhook',
+  }),
+};
 
-// Log Redis configuration status
-if (isRedisConfigured()) {
-  console.log('✅ Redis Cloud rate limiting configured');
+// Log Upstash configuration status
+if (isUpstashConfigured()) {
+  console.log('✅ Upstash Redis rate limiting configured');
 } else {
-  console.warn('⚠️ Redis Cloud not configured, using in-memory rate limiting fallback');
+  console.warn('⚠️ Upstash Redis not configured, using in-memory rate limiting fallback');
 }
 
 /**
@@ -132,20 +183,27 @@ export async function rateLimit(
   const headers = new Headers();
 
   try {
-    if (isRedisConfigured()) {
-      // Use Redis Cloud rate limiting
+    if (isUpstashConfigured()) {
+      // Use Upstash Redis rate limiting
       // Select appropriate rate limiter based on endpoint
-      let limiter = rateLimiters.api; // Default
+      let limiter = upstashRateLimiters.api; // Default
       const pathname = request.nextUrl.pathname;
       
       if (pathname.includes('/search')) {
-        limiter = rateLimiters.search;
+        limiter = upstashRateLimiters.search;
       } else if (pathname.includes('/payment') || pathname.includes('/stripe')) {
-        limiter = rateLimiters.payment;
+        limiter = upstashRateLimiters.payment;
       } else if (pathname.includes('/auth') || pathname.includes('/login')) {
-        limiter = rateLimiters.auth;
+        limiter = upstashRateLimiters.auth;
       } else if (pathname.includes('/webhook')) {
-        limiter = rateLimiters.webhook;
+        limiter = upstashRateLimiters.webhook;
+      } else if (pathname.includes('/booking')) {
+        limiter = upstashRateLimiters.booking;
+      } else if (pathname.includes('/dashboard')) {
+        limiter = upstashRateLimiters.dashboard;
+      } else if (!pathname.startsWith('/api/')) {
+        // Page routes
+        limiter = upstashRateLimiters.pages;
       }
       
       const result = await limiter.limit(identifier);

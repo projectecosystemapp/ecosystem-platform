@@ -17,7 +17,7 @@ const sendEmailSchema = z.object({
     'custom'
   ]),
   to: z.string().email().or(z.array(z.string().email())),
-  data: z.record(z.any()).optional(),
+  data: z.record(z.string(), z.any()).optional(),
   subject: z.string().optional(),
   html: z.string().optional(),
   text: z.string().optional(),

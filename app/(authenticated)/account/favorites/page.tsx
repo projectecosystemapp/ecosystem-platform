@@ -31,35 +31,35 @@ export default async function FavoritesPage() {
         description: providersTable.bio,
         image: providersTable.profileImageUrl,
         rating: sql<number>`4.5`,
-        category: providersTable.serviceCategory,
+        category: sql<string>`''`,  // serviceCategory doesn't exist in schema
       },
       // Event details
       event: {
         id: eventsTable.id,
-        name: eventsTable.name,
+        name: eventsTable.title,
         description: eventsTable.description,
-        image: eventsTable.imageUrl,
-        price: eventsTable.price,
-        date: eventsTable.date,
-        location: eventsTable.location,
+        image: sql<string>`''`,  // imageUrl doesn't exist in events schema
+        price: sql<number>`0`,  // price doesn't exist in events schema
+        date: eventsTable.startDateTime,
+        location: sql<string>`''`,  // location is complex nested object in schema
       },
       // Space details
       space: {
         id: spacesTable.id,
         name: spacesTable.name,
         description: spacesTable.description,
-        image: spacesTable.imageUrl,
+        image: sql<string>`''`,  // imageUrl doesn't exist in spaces schema
         hourlyRate: spacesTable.hourlyRate,
         dailyRate: spacesTable.dailyRate,
-        location: spacesTable.location,
+        location: sql<string>`''`,  // location is complex object in schema
         capacity: spacesTable.capacity,
       },
       // Thing details
       thing: {
         id: thingsTable.id,
-        name: thingsTable.name,
+        name: thingsTable.title,
         description: thingsTable.description,
-        image: thingsTable.imageUrl,
+        image: thingsTable.thumbnailUrl,
         price: thingsTable.price,
         condition: thingsTable.condition,
         category: thingsTable.category,
@@ -74,14 +74,19 @@ export default async function FavoritesPage() {
     .orderBy(desc(favoritesTable.createdAt));
 
   // Transform favorites into a consistent format
-  const transformedFavorites = favorites.map((fav) => {
+  const transformedFavorites = favorites.filter((fav) => 
+    (fav.provider?.id && fav.type === "provider") ||
+    (fav.event?.id && fav.type === "event") ||
+    (fav.space?.id && fav.type === "space") ||
+    (fav.thing?.id && fav.type === "thing")
+  ).map((fav) => {
     let itemData;
     let href = "/marketplace";
     
     switch (fav.type) {
       case "provider":
         itemData = {
-          id: fav.provider?.id,
+          id: fav.provider!.id,
           name: fav.provider?.name,
           description: fav.provider?.description,
           image: fav.provider?.image,
@@ -89,12 +94,12 @@ export default async function FavoritesPage() {
           rating: fav.provider?.rating,
           category: fav.provider?.category,
         };
-        href = `/providers/${fav.provider?.id}`;
+        href = `/providers/${fav.provider!.id}`;
         break;
         
       case "event":
         itemData = {
-          id: fav.event?.id,
+          id: fav.event!.id,
           name: fav.event?.name,
           description: fav.event?.description,
           image: fav.event?.image,
@@ -104,12 +109,12 @@ export default async function FavoritesPage() {
           date: fav.event?.date,
           location: fav.event?.location,
         };
-        href = `/events/${fav.event?.id}`;
+        href = `/events/${fav.event!.id}`;
         break;
         
       case "space":
         itemData = {
-          id: fav.space?.id,
+          id: fav.space!.id,
           name: fav.space?.name,
           description: fav.space?.description,
           image: fav.space?.image,
@@ -119,12 +124,12 @@ export default async function FavoritesPage() {
           capacity: fav.space?.capacity,
           location: fav.space?.location,
         };
-        href = `/spaces/${fav.space?.id}`;
+        href = `/spaces/${fav.space!.id}`;
         break;
         
       case "thing":
         itemData = {
-          id: fav.thing?.id,
+          id: fav.thing!.id,
           name: fav.thing?.name,
           description: fav.thing?.description,
           image: fav.thing?.image,
@@ -133,7 +138,7 @@ export default async function FavoritesPage() {
           category: fav.thing?.category,
           condition: fav.thing?.condition,
         };
-        href = `/things/${fav.thing?.id}`;
+        href = `/things/${fav.thing!.id}`;
         break;
         
       default:

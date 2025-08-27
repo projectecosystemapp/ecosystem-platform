@@ -6,7 +6,13 @@
  */
 
 import { db } from "@/db/db";
-import { sql } from "drizzle-orm";
+import { eq, and, lt, inArray } from "drizzle-orm";
+import { 
+  webhookEventsTable, 
+  disputesTable, 
+  payoutsTable, 
+  notificationLogsTable 
+} from "@/db/schema";
 
 export interface WebhookEvent {
   eventId: string;
@@ -22,30 +28,24 @@ export interface WebhookEvent {
  */
 export async function logWebhookEventToDB(event: WebhookEvent): Promise<void> {
   try {
-    await db.execute(sql`
-      INSERT INTO webhook_events (
-        event_id,
-        event_type,
-        status,
-        payload,
-        error_message,
-        retry_count,
-        processed_at
-      ) VALUES (
-        ${event.eventId},
-        ${event.eventType},
-        ${event.status},
-        ${JSON.stringify(event.payload || {})}::jsonb,
-        ${event.errorMessage || null},
-        ${event.retryCount || 0},
-        ${event.status === 'completed' || event.status === 'failed' ? new Date() : null}
-      )
-      ON CONFLICT (event_id) DO UPDATE SET
-        status = EXCLUDED.status,
-        error_message = EXCLUDED.error_message,
-        retry_count = webhook_events.retry_count + 1,
-        processed_at = EXCLUDED.processed_at
-    `);
+    await db.insert(webhookEventsTable)
+      .values({
+        eventId: event.eventId,
+        eventType: event.eventType,
+        status: event.status,
+        payload: event.payload || {},
+        errorMessage: event.errorMessage || null,
+        retryCount: event.retryCount || 0,
+        processedAt: (event.status === 'completed' || event.status === 'failed') ? new Date() : null
+      })
+      .onConflictDoUpdate({
+        target: webhookEventsTable.eventId,
+        set: {
+          status: event.status,
+          errorMessage: event.errorMessage || null,
+          processedAt: (event.status === 'completed' || event.status === 'failed') ? new Date() : null
+        }
+      });
   } catch (error) {
     // Don't throw - audit logging should not break webhook processing
     console.error('[WEBHOOK_AUDIT_ERROR]', error);
@@ -57,12 +57,15 @@ export async function logWebhookEventToDB(event: WebhookEvent): Promise<void> {
  */
 export async function isEventProcessed(eventId: string): Promise<boolean> {
   try {
-    const result = await db.execute(sql`
-      SELECT status FROM webhook_events 
-      WHERE event_id = ${eventId} 
-      AND status = 'completed'
-      LIMIT 1
-    `);
+    const result = await db.select({ status: webhookEventsTable.status })
+      .from(webhookEventsTable)
+      .where(
+        and(
+          eq(webhookEventsTable.eventId, eventId),
+          eq(webhookEventsTable.status, 'completed')
+        )
+      )
+      .limit(1);
     
     return result.length > 0;
   } catch (error) {
@@ -76,13 +79,12 @@ export async function isEventProcessed(eventId: string): Promise<boolean> {
  */
 export async function getEventRetryCount(eventId: string): Promise<number> {
   try {
-    const result = await db.execute(sql`
-      SELECT retry_count FROM webhook_events 
-      WHERE event_id = ${eventId}
-      LIMIT 1
-    `);
+    const result = await db.select({ retryCount: webhookEventsTable.retryCount })
+      .from(webhookEventsTable)
+      .where(eq(webhookEventsTable.eventId, eventId))
+      .limit(1);
     
-    return result.length > 0 ? (result[0].retry_count as number) : 0;
+    return result.length > 0 ? (result[0].retryCount || 0) : 0;
   } catch (error) {
     console.error('[WEBHOOK_RETRY_COUNT_ERROR]', error);
     return 0;
@@ -103,30 +105,24 @@ export async function logDispute(dispute: {
   evidenceDueBy?: Date;
 }): Promise<void> {
   try {
-    await db.execute(sql`
-      INSERT INTO disputes (
-        booking_id,
-        transaction_id,
-        stripe_dispute_id,
-        stripe_charge_id,
-        amount,
-        reason,
-        status,
-        evidence_due_by
-      ) VALUES (
-        ${dispute.bookingId || null},
-        ${dispute.transactionId || null},
-        ${dispute.stripeDisputeId},
-        ${dispute.stripeChargeId},
-        ${dispute.amount},
-        ${dispute.reason},
-        ${dispute.status},
-        ${dispute.evidenceDueBy || null}
-      )
-      ON CONFLICT (stripe_dispute_id) DO UPDATE SET
-        status = EXCLUDED.status,
-        updated_at = NOW()
-    `);
+    await db.insert(disputesTable)
+      .values({
+        bookingId: dispute.bookingId || null,
+        transactionId: dispute.transactionId || null,
+        stripeDisputeId: dispute.stripeDisputeId,
+        stripeChargeId: dispute.stripeChargeId,
+        amount: dispute.amount.toString(),
+        reason: dispute.reason,
+        status: dispute.status,
+        evidenceDueBy: dispute.evidenceDueBy || null
+      })
+      .onConflictDoUpdate({
+        target: disputesTable.stripeDisputeId,
+        set: {
+          status: dispute.status,
+          updatedAt: new Date()
+        }
+      });
   } catch (error) {
     console.error('[DISPUTE_LOG_ERROR]', error);
     throw error; // Disputes are critical - should fail the webhook
@@ -144,16 +140,16 @@ export async function updateDisputeStatus(
   fundsReinstated?: boolean
 ): Promise<void> {
   try {
-    await db.execute(sql`
-      UPDATE disputes SET
-        status = ${status},
-        outcome = ${outcome || null},
-        funds_withdrawn = ${fundsWithdrawn || false},
-        funds_reinstated = ${fundsReinstated || false},
-        resolved_at = ${outcome ? new Date() : null},
-        updated_at = NOW()
-      WHERE stripe_dispute_id = ${stripeDisputeId}
-    `);
+    await db.update(disputesTable)
+      .set({
+        status,
+        outcome: outcome || null,
+        fundsWithdrawn: fundsWithdrawn || false,
+        fundsReinstated: fundsReinstated || false,
+        resolvedAt: outcome ? new Date() : null,
+        updatedAt: new Date()
+      })
+      .where(eq(disputesTable.stripeDisputeId, stripeDisputeId));
   } catch (error) {
     console.error('[DISPUTE_UPDATE_ERROR]', error);
     throw error;
@@ -175,36 +171,29 @@ export async function logPayout(payout: {
   failureMessage?: string;
 }): Promise<void> {
   try {
-    await db.execute(sql`
-      INSERT INTO payouts (
-        provider_id,
-        stripe_payout_id,
-        stripe_account_id,
-        amount,
-        arrival_date,
-        method,
-        status,
-        failure_code,
-        failure_message
-      ) VALUES (
-        ${payout.providerId || null},
-        ${payout.stripePayoutId},
-        ${payout.stripeAccountId},
-        ${payout.amount},
-        ${payout.arrivalDate || null},
-        ${payout.method || 'standard'},
-        ${payout.status},
-        ${payout.failureCode || null},
-        ${payout.failureMessage || null}
-      )
-      ON CONFLICT (stripe_payout_id) DO UPDATE SET
-        status = EXCLUDED.status,
-        failure_code = EXCLUDED.failure_code,
-        failure_message = EXCLUDED.failure_message,
-        paid_at = ${payout.status === 'paid' ? new Date() : null},
-        failed_at = ${payout.status === 'failed' ? new Date() : null},
-        updated_at = NOW()
-    `);
+    await db.insert(payoutsTable)
+      .values({
+        providerId: payout.providerId,
+        stripePayoutId: payout.stripePayoutId,
+        stripeAccountId: payout.stripeAccountId,
+        amount: payout.amount.toString(),
+        arrivalDate: payout.arrivalDate ? payout.arrivalDate.toISOString().split('T')[0] : null,
+        method: payout.method || 'standard',
+        status: payout.status,
+        failureCode: payout.failureCode || null,
+        failureMessage: payout.failureMessage || null
+      })
+      .onConflictDoUpdate({
+        target: payoutsTable.stripePayoutId,
+        set: {
+          status: payout.status,
+          failureCode: payout.failureCode || null,
+          failureMessage: payout.failureMessage || null,
+          paidAt: payout.status === 'paid' ? new Date() : null,
+          failedAt: payout.status === 'failed' ? new Date() : null,
+          updatedAt: new Date()
+        }
+      });
   } catch (error) {
     console.error('[PAYOUT_LOG_ERROR]', error);
     // Don't throw - payout logging is not critical
@@ -230,43 +219,25 @@ export async function logNotification(notification: {
   providerMessageId?: string;
 }): Promise<void> {
   try {
-    await db.execute(sql`
-      INSERT INTO notification_logs (
-        type,
-        recipient_id,
-        recipient_email,
-        recipient_phone,
-        channel,
-        subject,
-        body,
-        template_name,
-        template_data,
-        status,
-        error_message,
-        provider,
-        provider_message_id,
-        sent_at,
-        delivered_at,
-        failed_at
-      ) VALUES (
-        ${notification.type},
-        ${notification.recipientId || null},
-        ${notification.recipientEmail || null},
-        ${notification.recipientPhone || null},
-        ${notification.channel},
-        ${notification.subject || null},
-        ${notification.body || null},
-        ${notification.templateName || null},
-        ${notification.templateData ? JSON.stringify(notification.templateData) : null}::jsonb,
-        ${notification.status},
-        ${notification.errorMessage || null},
-        ${notification.provider || null},
-        ${notification.providerMessageId || null},
-        ${notification.status === 'sent' ? new Date() : null},
-        ${notification.status === 'delivered' ? new Date() : null},
-        ${notification.status === 'failed' ? new Date() : null}
-      )
-    `);
+    await db.insert(notificationLogsTable)
+      .values({
+        type: notification.type,
+        recipientId: notification.recipientId || null,
+        recipientEmail: notification.recipientEmail || null,
+        recipientPhone: notification.recipientPhone || null,
+        channel: notification.channel,
+        subject: notification.subject || null,
+        body: notification.body || null,
+        templateName: notification.templateName || null,
+        templateData: notification.templateData || null,
+        status: notification.status,
+        errorMessage: notification.errorMessage || null,
+        provider: notification.provider || null,
+        providerMessageId: notification.providerMessageId || null,
+        sentAt: notification.status === 'sent' ? new Date() : null,
+        deliveredAt: notification.status === 'delivered' ? new Date() : null,
+        failedAt: notification.status === 'failed' ? new Date() : null
+      });
   } catch (error) {
     console.error('[NOTIFICATION_LOG_ERROR]', error);
     // Don't throw - notification logging should not break processing
@@ -283,18 +254,19 @@ export async function cleanupOldWebhookEvents(daysToKeep: number = 30): Promise<
       throw new Error('Invalid daysToKeep parameter: must be integer between 0 and 365');
     }
     
-    // Use parameterized query with safe date calculation
-    // Instead of string interpolation, calculate the date in JavaScript
+    // Calculate the cutoff date in JavaScript
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
     
-    const result = await db.execute(sql`
-      DELETE FROM webhook_events 
-      WHERE created_at < ${cutoffDate}
-      AND status IN ('completed', 'failed')
-    `);
+    const result = await db.delete(webhookEventsTable)
+      .where(
+        and(
+          lt(webhookEventsTable.createdAt, cutoffDate),
+          inArray(webhookEventsTable.status, ['completed', 'failed'])
+        )
+      );
     
-    return (result as any).affectedRows || (result as any).rowCount || 0;
+    return result.length || 0;
   } catch (error) {
     console.error('[WEBHOOK_CLEANUP_ERROR]', error);
     return 0;

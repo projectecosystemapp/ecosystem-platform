@@ -42,7 +42,7 @@ const addParticipantsSchema = z.object({
       phone: z.string(),
       relationship: z.string()
     }).optional(),
-    customResponses: z.record(z.any()).optional()
+    customResponses: z.record(z.string(), z.any()).optional()
   })),
   sendInvitations: z.boolean().default(true),
   customMessage: z.string().optional()
@@ -70,7 +70,7 @@ const updateParticipantSchema = z.object({
     phone: z.string(),
     relationship: z.string()
   }).optional(),
-  customResponses: z.record(z.any()).optional()
+  customResponses: z.record(z.string(), z.any()).optional()
 });
 
 const rsvpSchema = z.object({
@@ -86,7 +86,7 @@ const rsvpSchema = z.object({
     phone: z.string(),
     relationship: z.string()
   }).optional(),
-  customResponses: z.record(z.any()).optional()
+  customResponses: z.record(z.string(), z.any()).optional()
 });
 
 /**

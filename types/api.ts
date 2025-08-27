@@ -13,6 +13,8 @@ import {
   BookingId,
   ProviderId,
   UserId,
+  NotificationId,
+  ReviewId,
   ServiceId,
   Money,
   TimeSlot,
@@ -245,7 +247,7 @@ export interface WebhookEvent {
 export const webhookEventSchema = z.object({
   id: z.string(),
   type: z.string(),
-  data: z.record(z.any()),
+  data: z.record(z.string(), z.any()),
   timestamp: z.string().datetime(),
   signature: z.string(),
 });

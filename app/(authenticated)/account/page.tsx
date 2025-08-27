@@ -57,7 +57,7 @@ export default async function AccountDashboard() {
       status: bookingsTable.status,
       bookingType: bookingsTable.bookingType,
       providerId: bookingsTable.providerId,
-      providerName: providersTable.businessName,
+      providerName: providersTable.displayName,
     })
     .from(bookingsTable)
     .leftJoin(providersTable, eq(bookingsTable.providerId, providersTable.id))

@@ -6,6 +6,7 @@ import { bookingsTable } from "@/db/schema/bookings-schema";
 import { paymentsTable } from "@/db/schema/payments-schema";
 import { reviewsTable } from "@/db/schema/reviews-schema";
 import { eq, and, gte, desc, sql, count } from "drizzle-orm";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { MetricsCard } from "@/components/studio/MetricsCard";
 import { EarningsChart } from "@/components/studio/EarningsChart";
 import { BookingsCalendar } from "@/components/studio/BookingsCalendar";
@@ -37,13 +38,14 @@ async function getProviderMetrics(providerId: string) {
   // Get earnings for last 30 days
   const earnings = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${paymentsTable.providerAmount}), 0)::numeric`,
+      total: sql<number>`COALESCE(SUM(${paymentsTable.providerPayoutCents} / 100.0), 0)::numeric`,
       count: count()
     })
     .from(paymentsTable)
+    .innerJoin(bookingsTable, eq(paymentsTable.bookingId, bookingsTable.id))
     .where(
       and(
-        eq(paymentsTable.providerId, providerId),
+        eq(bookingsTable.providerId, providerId),
         eq(paymentsTable.status, "succeeded"),
         gte(paymentsTable.createdAt, thirtyDaysAgo)
       )
@@ -53,8 +55,8 @@ async function getProviderMetrics(providerId: string) {
   const bookings = await db
     .select({
       total: count(),
-      completed: sql<number>`COUNT(CASE WHEN ${bookingsTable.status} = 'COMPLETED' THEN 1 END)`,
-      upcoming: sql<number>`COUNT(CASE WHEN ${bookingsTable.status} IN ('ACCEPTED', 'PAYMENT_SUCCEEDED') AND ${bookingsTable.scheduledFor} > NOW() THEN 1 END)`,
+      completed: sql<number>`COUNT(CASE WHEN ${bookingsTable.status} = 'completed' THEN 1 END)`,
+      upcoming: sql<number>`COUNT(CASE WHEN ${bookingsTable.status} IN ('confirmed') AND ${bookingsTable.bookingDate} > NOW() THEN 1 END)`,
     })
     .from(bookingsTable)
     .where(
@@ -70,12 +72,13 @@ async function getProviderMetrics(providerId: string) {
       id: bookingsTable.id,
       status: bookingsTable.status,
       totalAmount: bookingsTable.totalAmount,
-      scheduledFor: bookingsTable.scheduledFor,
-      customerName: bookingsTable.customerName,
-      serviceType: bookingsTable.serviceType,
+      scheduledFor: bookingsTable.bookingDate,
+      customerName: sql<string>`COALESCE(profiles.email, ${bookingsTable.guestEmail})`,
+      serviceType: bookingsTable.serviceName,
       createdAt: bookingsTable.createdAt,
     })
     .from(bookingsTable)
+    .leftJoin(profilesTable, eq(bookingsTable.customerId, profilesTable.userId))
     .where(eq(bookingsTable.providerId, providerId))
     .orderBy(desc(bookingsTable.createdAt))
     .limit(5);
@@ -84,12 +87,13 @@ async function getProviderMetrics(providerId: string) {
   const dailyEarnings = await db
     .select({
       date: sql<string>`DATE(${paymentsTable.createdAt})`,
-      amount: sql<number>`COALESCE(SUM(${paymentsTable.providerAmount}), 0)::numeric`,
+      amount: sql<number>`COALESCE(SUM(${paymentsTable.providerPayoutCents} / 100.0), 0)::numeric`,
     })
     .from(paymentsTable)
+    .innerJoin(bookingsTable, eq(paymentsTable.bookingId, bookingsTable.id))
     .where(
       and(
-        eq(paymentsTable.providerId, providerId),
+        eq(bookingsTable.providerId, providerId),
         eq(paymentsTable.status, "succeeded"),
         gte(paymentsTable.createdAt, thirtyDaysAgo)
       )
@@ -238,12 +242,12 @@ export default async function StudioDashboard() {
                         </div>
                         <div className="flex flex-col items-end">
                           <span className="text-sm font-medium">
-                            ${booking.totalAmount}
+                            ${Number(booking.totalAmount).toFixed(2)}
                           </span>
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                            booking.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                            booking.status === 'PAYMENT_SUCCEEDED' ? 'bg-blue-100 text-blue-800' :
-                            booking.status === 'ACCEPTED' ? 'bg-yellow-100 text-yellow-800' :
+                            booking.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            booking.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                            booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
                             {booking.status.toLowerCase().replace(/_/g, ' ')}

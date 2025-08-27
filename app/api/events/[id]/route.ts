@@ -3,7 +3,7 @@ import { getEventById, updateEvent, deleteEvent } from "@/db/queries/events-quer
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody, ApiContext } from "@/lib/security/api-handler";
-import { db } from "@/db";
+import { db } from "@/db/db";
 import { providersTable } from "@/db/schema/providers-schema";
 import { eq } from "drizzle-orm";
 
