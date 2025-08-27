@@ -1,0 +1,516 @@
+import { db } from "@/db/db";
+import { bookingsTable, transactionsTable, providersTable } from "@/db/schema";
+import { eq, and, sql, or, isNull, desc, gte, lte } from "drizzle-orm";
+
+// Types
+export interface TaxRate {
+  id: string;
+  country: string;
+  state?: string;
+  city?: string;
+  postalCode?: string;
+  taxType: 'sales_tax' | 'vat' | 'gst' | 'service_tax';
+  rate: number;
+  appliesTo: string[];
+  effectiveDate: Date;
+  endDate?: Date;
+  isActive: boolean;
+}
+
+export interface TaxCalculation {
+  subtotal: number;
+  taxableAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  taxBreakdown: TaxBreakdownItem[];
+  currency: string;
+}
+
+export interface TaxBreakdownItem {
+  taxType: string;
+  jurisdiction: string;
+  rate: number;
+  taxableAmount: number;
+  taxAmount: number;
+}
+
+export interface TaxConfig {
+  enableTax: boolean;
+  taxOnPlatformFee: boolean;
+  taxOnService: boolean;
+  defaultTaxRate: number;
+  taxIdRequired: boolean;
+}
+
+export class TaxService {
+  private taxConfig: TaxConfig = {
+    enableTax: true,
+    taxOnPlatformFee: false,
+    taxOnService: true,
+    defaultTaxRate: 0, // 0% default, use location-based rates
+    taxIdRequired: false,
+  };
+
+  /**
+   * Calculate tax for a booking
+   */
+  async calculateBookingTax(
+    bookingId: string,
+    amount: number,
+    platformFee: number,
+    location: {
+      country: string;
+      state?: string;
+      city?: string;
+      postalCode?: string;
+    },
+    currency: string = 'USD'
+  ): Promise<TaxCalculation> {
+    if (!this.taxConfig.enableTax) {
+      return {
+        subtotal: amount,
+        taxableAmount: 0,
+        taxAmount: 0,
+        totalAmount: amount,
+        taxBreakdown: [],
+        currency,
+      };
+    }
+
+    // Get applicable tax rates
+    const taxRates = await this.getApplicableTaxRates(location);
+    
+    // Calculate taxable amount
+    let taxableAmount = 0;
+    if (this.taxConfig.taxOnService) {
+      taxableAmount += amount - platformFee; // Tax on service amount only
+    }
+    if (this.taxConfig.taxOnPlatformFee) {
+      taxableAmount += platformFee; // Also tax the platform fee
+    }
+
+    // Calculate tax for each applicable rate
+    const taxBreakdown: TaxBreakdownItem[] = [];
+    let totalTaxAmount = 0;
+
+    for (const rate of taxRates) {
+      const applicableAmount = this.getApplicableAmount(
+        taxableAmount,
+        platformFee,
+        rate.appliesTo
+      );
+      
+      const taxAmount = this.roundTax(applicableAmount * rate.rate);
+      
+      taxBreakdown.push({
+        taxType: rate.taxType,
+        jurisdiction: this.formatJurisdiction(rate),
+        rate: rate.rate,
+        taxableAmount: applicableAmount,
+        taxAmount,
+      });
+
+      totalTaxAmount += taxAmount;
+    }
+
+    // Store tax calculation in database
+    await this.storeTaxCalculation(bookingId, taxableAmount, totalTaxAmount, taxBreakdown);
+
+    return {
+      subtotal: amount,
+      taxableAmount,
+      taxAmount: totalTaxAmount,
+      totalAmount: amount + totalTaxAmount,
+      taxBreakdown,
+      currency,
+    };
+  }
+
+  /**
+   * Get applicable tax rates for a location
+   */
+  private async getApplicableTaxRates(location: {
+    country: string;
+    state?: string;
+    city?: string;
+    postalCode?: string;
+  }): Promise<TaxRate[]> {
+    const now = new Date();
+    
+    // Query tax rates from most specific to least specific
+    const conditions = [
+      eq(sql`tax_rates.country`, location.country),
+      eq(sql`tax_rates.is_active`, true),
+      sql`${sql`tax_rates.effective_date`} <= ${now}`,
+      or(
+        isNull(sql`tax_rates.end_date`),
+        sql`${sql`tax_rates.end_date`} > ${now}`
+      ),
+    ];
+
+    // Add location specificity
+    const locationConditions = [];
+    
+    // Most specific: postal code
+    if (location.postalCode) {
+      locationConditions.push(
+        and(
+          eq(sql`tax_rates.postal_code`, location.postalCode),
+          eq(sql`tax_rates.city`, location.city || ''),
+          eq(sql`tax_rates.state`, location.state || '')
+        )
+      );
+    }
+    
+    // City level
+    if (location.city && location.state) {
+      locationConditions.push(
+        and(
+          eq(sql`tax_rates.city`, location.city),
+          eq(sql`tax_rates.state`, location.state),
+          isNull(sql`tax_rates.postal_code`)
+        )
+      );
+    }
+    
+    // State level
+    if (location.state) {
+      locationConditions.push(
+        and(
+          eq(sql`tax_rates.state`, location.state),
+          isNull(sql`tax_rates.city`),
+          isNull(sql`tax_rates.postal_code`)
+        )
+      );
+    }
+    
+    // Country level (fallback)
+    locationConditions.push(
+      and(
+        isNull(sql`tax_rates.state`),
+        isNull(sql`tax_rates.city`),
+        isNull(sql`tax_rates.postal_code`)
+      )
+    );
+
+    // Execute query with location hierarchy
+    const taxRates = await db
+      .select({
+        id: sql`tax_rates.id`,
+        country: sql`tax_rates.country`,
+        state: sql`tax_rates.state`,
+        city: sql`tax_rates.city`,
+        postalCode: sql`tax_rates.postal_code`,
+        taxType: sql`tax_rates.tax_type`,
+        rate: sql`tax_rates.rate`,
+        appliesTo: sql`tax_rates.applies_to`,
+        effectiveDate: sql`tax_rates.effective_date`,
+        endDate: sql`tax_rates.end_date`,
+        isActive: sql`tax_rates.is_active`,
+      })
+      .from(sql`tax_rates`)
+      .where(and(...conditions, or(...locationConditions)))
+      .orderBy(
+        // Order by specificity
+        desc(sql`tax_rates.postal_code IS NOT NULL`),
+        desc(sql`tax_rates.city IS NOT NULL`),
+        desc(sql`tax_rates.state IS NOT NULL`)
+      );
+
+    return taxRates as TaxRate[];
+  }
+
+  /**
+   * Get applicable amount based on tax configuration
+   */
+  private getApplicableAmount(
+    serviceAmount: number,
+    platformFee: number,
+    appliesTo: string[]
+  ): number {
+    let amount = 0;
+    
+    if (appliesTo.includes('all')) {
+      return serviceAmount;
+    }
+    
+    if (appliesTo.includes('service')) {
+      amount += serviceAmount - platformFee;
+    }
+    
+    if (appliesTo.includes('platform_fee')) {
+      amount += platformFee;
+    }
+    
+    return amount;
+  }
+
+  /**
+   * Round tax amount to 2 decimal places
+   */
+  private roundTax(amount: number): number {
+    return Math.round(amount * 100) / 100;
+  }
+
+  /**
+   * Format jurisdiction string
+   */
+  private formatJurisdiction(rate: TaxRate): string {
+    const parts = [rate.country];
+    if (rate.state) parts.push(rate.state);
+    if (rate.city) parts.push(rate.city);
+    if (rate.postalCode) parts.push(rate.postalCode);
+    return parts.join(', ');
+  }
+
+  /**
+   * Store tax calculation in database
+   */
+  private async storeTaxCalculation(
+    bookingId: string,
+    taxableAmount: number,
+    taxAmount: number,
+    breakdown: TaxBreakdownItem[]
+  ) {
+    // Update booking with tax information in metadata
+    const existingBooking = await db
+      .select({ metadata: bookingsTable.metadata })
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, bookingId))
+      .limit(1);
+    
+    const currentMetadata = existingBooking[0]?.metadata || {};
+    
+    await db
+      .update(bookingsTable)
+      .set({
+        metadata: {
+          ...currentMetadata,
+          taxAmount: taxAmount.toString(),
+          taxBreakdown: breakdown,
+        } as any,
+      })
+      .where(eq(bookingsTable.id, bookingId));
+
+    // Store individual tax calculations for each jurisdiction
+    for (const item of breakdown) {
+      const taxRate = await this.findTaxRate(item);
+      
+      await db.insert(sql`tax_calculations`).values({
+        booking_id: bookingId,
+        tax_rate_id: taxRate?.id,
+        taxable_amount: item.taxableAmount,
+        tax_amount: item.taxAmount,
+        tax_type: item.taxType,
+        jurisdiction: item.jurisdiction,
+      });
+    }
+  }
+
+  /**
+   * Find tax rate ID from breakdown item
+   */
+  private async findTaxRate(item: TaxBreakdownItem): Promise<{ id: string } | null> {
+    const [rate] = await db
+      .select({ id: sql`tax_rates.id` })
+      .from(sql`tax_rates`)
+      .where(
+        and(
+          eq(sql`tax_rates.tax_type`, item.taxType),
+          eq(sql`tax_rates.rate`, item.rate),
+          eq(sql`tax_rates.is_active`, true)
+        )
+      )
+      .limit(1);
+    
+    return rate;
+  }
+
+  /**
+   * Create or update tax rate
+   */
+  async upsertTaxRate(taxRate: Omit<TaxRate, 'id'>): Promise<TaxRate> {
+    // Check if rate exists
+    const existing = await db
+      .select()
+      .from(sql`tax_rates`)
+      .where(
+        and(
+          eq(sql`tax_rates.country`, taxRate.country),
+          eq(sql`tax_rates.state`, taxRate.state || ''),
+          eq(sql`tax_rates.city`, taxRate.city || ''),
+          eq(sql`tax_rates.postal_code`, taxRate.postalCode || ''),
+          eq(sql`tax_rates.tax_type`, taxRate.taxType),
+          eq(sql`tax_rates.is_active`, true)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Update existing rate
+      await db
+        .update(sql`tax_rates`)
+        .set({
+          rate: taxRate.rate,
+          applies_to: taxRate.appliesTo,
+          effective_date: taxRate.effectiveDate,
+          end_date: taxRate.endDate,
+          updated_at: new Date(),
+        })
+        .where(eq(sql`tax_rates.id`, existing[0].id));
+      
+      return { ...existing[0], ...taxRate } as TaxRate;
+    } else {
+      // Insert new rate
+      const [newRate] = await db
+        .insert(sql`tax_rates`)
+        .values({
+          country: taxRate.country,
+          state: taxRate.state,
+          city: taxRate.city,
+          postal_code: taxRate.postalCode,
+          tax_type: taxRate.taxType,
+          rate: taxRate.rate,
+          applies_to: taxRate.appliesTo,
+          effective_date: taxRate.effectiveDate,
+          end_date: taxRate.endDate,
+          is_active: taxRate.isActive,
+        })
+        .returning();
+      
+      return newRate as TaxRate;
+    }
+  }
+
+  /**
+   * Get tax report for a provider
+   */
+  async getProviderTaxReport(
+    providerId: string,
+    startDate: Date,
+    endDate: Date
+  ) {
+    // Get all tax calculations for provider's bookings
+    const taxData = await db
+      .select({
+        bookingId: bookingsTable.id,
+        bookingDate: bookingsTable.bookingDate,
+        serviceName: bookingsTable.serviceName,
+        taxAmount: sql`tax_calculations.tax_amount`,
+        taxType: sql`tax_calculations.tax_type`,
+        jurisdiction: sql`tax_calculations.jurisdiction`,
+        taxableAmount: sql`tax_calculations.taxable_amount`,
+      })
+      .from(sql`tax_calculations`)
+      .leftJoin(bookingsTable, eq(sql`tax_calculations.booking_id`, bookingsTable.id))
+      .where(
+        and(
+          eq(bookingsTable.providerId, providerId),
+          gte(sql`tax_calculations.created_at`, startDate),
+          lte(sql`tax_calculations.created_at`, endDate)
+        )
+      )
+      .orderBy(desc(bookingsTable.bookingDate));
+
+    // Summarize by jurisdiction
+    const summary = taxData.reduce((acc, item) => {
+      const key = `${item.jurisdiction}-${item.taxType}`;
+      if (!acc[key]) {
+        acc[key] = {
+          jurisdiction: item.jurisdiction,
+          taxType: item.taxType,
+          totalTaxable: 0,
+          totalTax: 0,
+          transactionCount: 0,
+        };
+      }
+      acc[key].totalTaxable += parseFloat(item.taxableAmount || '0');
+      acc[key].totalTax += parseFloat(item.taxAmount || '0');
+      acc[key].transactionCount += 1;
+      return acc;
+    }, {} as Record<string, any>);
+
+    return {
+      details: taxData,
+      summary: Object.values(summary),
+      totals: {
+        totalTaxable: taxData.reduce((sum, item) => sum + parseFloat(item.taxableAmount || '0'), 0),
+        totalTax: taxData.reduce((sum, item) => sum + parseFloat(item.taxAmount || '0'), 0),
+        transactionCount: taxData.length,
+      },
+    };
+  }
+
+  /**
+   * Validate tax ID (for providers or customers)
+   */
+  async validateTaxId(taxId: string, country: string): Promise<boolean> {
+    // Implement tax ID validation based on country
+    // This is a simplified example - real implementation would use external APIs
+    
+    const patterns: Record<string, RegExp> = {
+      US: /^\d{2}-\d{7}$/, // EIN format
+      CA: /^\d{9}$/, // BN format
+      GB: /^[A-Z]{2}\d{6}[A-Z]?$/, // VAT format
+      EU: /^[A-Z]{2}\d{8,12}$/, // EU VAT format
+    };
+
+    const pattern = patterns[country];
+    if (!pattern) {
+      // Unknown country, can't validate
+      return true;
+    }
+
+    return pattern.test(taxId);
+  }
+
+  /**
+   * Generate tax invoice
+   */
+  async generateTaxInvoice(bookingId: string): Promise<string> {
+    const [booking] = await db
+      .select({
+        id: bookingsTable.id,
+        serviceName: bookingsTable.serviceName,
+        servicePrice: bookingsTable.servicePrice,
+        metadata: bookingsTable.metadata,
+        totalAmount: bookingsTable.totalAmount,
+        bookingDate: bookingsTable.bookingDate,
+        confirmationCode: bookingsTable.confirmationCode,
+      })
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, bookingId))
+      .limit(1);
+      
+    const taxAmount = (booking.metadata as any)?.taxAmount || '0';
+    const taxBreakdown = (booking.metadata as any)?.taxBreakdown || [];
+
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    // Generate invoice HTML or PDF
+    // This is a simplified example
+    const invoice = `
+      TAX INVOICE
+      ====================
+      Invoice #: ${booking.confirmationCode}
+      Date: ${booking.bookingDate}
+      
+      Service: ${booking.serviceName}
+      Subtotal: $${booking.servicePrice}
+      
+      Tax Breakdown:
+      ${JSON.stringify(taxBreakdown, null, 2)}
+      
+      Tax Total: $${taxAmount || 0}
+      ====================
+      TOTAL: $${booking.totalAmount}
+    `;
+
+    return invoice;
+  }
+}
+
+// Export singleton instance
+export const taxService = new TaxService();

@@ -1,9 +1,13 @@
 import { db } from "@/db/db";
 import { 
   transactionsTable, 
-  bookingsTable,
-  payoutSchedulesTable 
+  bookingsTable
 } from "@/db/schema";
+import { 
+  reconciliationRunsTable, 
+  reconciliationItemsTable 
+} from "@/db/schema/reconciliation-schema";
+import { payoutSchedulesTable } from "@/db/schema/enhanced-booking-schema";
 import { eq, and, gte, lte, sql, inArray, isNull } from "drizzle-orm";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
@@ -60,12 +64,12 @@ export class ReconciliationService {
 
     // Create reconciliation run record
     const [runRecord] = await db
-      .insert(sql`reconciliation_runs`)
+      .insert(reconciliationRunsTable)
       .values({
-        run_date: startOfDay,
-        run_type: 'daily',
+        runDate: startOfDay.toISOString().split('T')[0], // Convert to YYYY-MM-DD string
+        runType: 'daily',
         status: 'running',
-        start_time: new Date(),
+        startTime: new Date(),
       })
       .returning();
 
@@ -98,17 +102,17 @@ export class ReconciliationService {
 
       // 5. Update reconciliation run with results
       await db
-        .update(sql`reconciliation_runs`)
+        .update(reconciliationRunsTable)
         .set({
           status: 'completed',
-          end_time: new Date(),
-          total_transactions: dbTransactions.length + stripeTransactions.length,
-          matched_transactions: reconciliationResult.matched,
-          unmatched_transactions: reconciliationResult.unmatched,
-          discrepancies_found: discrepancies.length,
-          total_amount_reconciled: reconciliationResult.totalAmount,
+          endTime: new Date(),
+          totalTransactions: dbTransactions.length + stripeTransactions.length,
+          matchedTransactions: reconciliationResult.matched,
+          unmatchedTransactions: reconciliationResult.unmatched,
+          discrepanciesFound: discrepancies.length,
+          totalAmountReconciled: String(reconciliationResult.totalAmount),
         })
-        .where(eq(sql`reconciliation_runs.id`, runId));
+        .where(eq(reconciliationRunsTable.id, runId));
 
       // 6. Generate alerts for critical discrepancies
       await this.generateAlerts(discrepancies);
@@ -129,13 +133,13 @@ export class ReconciliationService {
       
       // Mark run as failed
       await db
-        .update(sql`reconciliation_runs`)
+        .update(reconciliationRunsTable)
         .set({
           status: 'failed',
-          end_time: new Date(),
-          error_message: errorMessage,
+          endTime: new Date(),
+          errorMessage: errorMessage,
         })
-        .where(eq(sql`reconciliation_runs.id`, runId));
+        .where(eq(reconciliationRunsTable.id, runId));
 
       throw error;
     }
@@ -155,7 +159,7 @@ export class ReconciliationService {
         platformFee: transactionsTable.platformFee,
         providerPayout: transactionsTable.providerPayout,
         refundAmount: transactionsTable.refundAmount,
-        currency: sql<string>`COALESCE(${transactionsTable.currency}, 'USD')`,
+        currency: sql<string>`'USD'`.as('currency'), // Default currency since transactions table doesn't have currency field
         status: transactionsTable.status,
         createdAt: transactionsTable.createdAt,
       })
@@ -232,7 +236,7 @@ export class ReconciliationService {
         amount: payout.amount,
         currency: payout.currency,
         type: 'payout',
-        metadata: payout.metadata,
+        metadata: payout.metadata || {},
       });
     }
 
@@ -251,7 +255,7 @@ export class ReconciliationService {
         amount: refund.amount,
         currency: refund.currency,
         type: 'refund',
-        metadata: refund.metadata,
+        metadata: refund.metadata || {},
       });
     }
 
@@ -370,18 +374,18 @@ export class ReconciliationService {
    * Record a discrepancy
    */
   private async recordDiscrepancy(runId: string, discrepancy: DiscrepancyItem) {
-    await db.insert(sql`reconciliation_items`).values({
-      reconciliation_run_id: runId,
-      transaction_id: discrepancy.transactionId || null,
-      stripe_charge_id: discrepancy.type === 'charge' ? discrepancy.stripeId : null,
-      stripe_transfer_id: discrepancy.type === 'transfer' ? discrepancy.stripeId : null,
-      item_type: discrepancy.type,
-      database_amount: discrepancy.databaseAmount / 100, // Convert to dollars
-      stripe_amount: discrepancy.stripeAmount / 100,
-      discrepancy_amount: discrepancy.difference / 100,
+    await db.insert(reconciliationItemsTable).values({
+      reconciliationRunId: runId,
+      transactionId: discrepancy.transactionId || null,
+      stripeChargeId: discrepancy.type === 'charge' ? discrepancy.stripeId : null,
+      stripeTransferId: discrepancy.type === 'transfer' ? discrepancy.stripeId : null,
+      itemType: discrepancy.type,
+      databaseAmount: String(discrepancy.databaseAmount / 100), // Convert to dollars
+      stripeAmount: String(discrepancy.stripeAmount / 100),
+      discrepancyAmount: String(discrepancy.difference / 100),
       currency: discrepancy.currency,
       status: discrepancy.status,
-      resolution_status: 'pending',
+      resolutionStatus: 'pending',
     });
   }
 
@@ -411,8 +415,8 @@ export class ReconciliationService {
   async getReconciliationReport(runId: string) {
     const run = await db
       .select()
-      .from(sql`reconciliation_runs`)
-      .where(eq(sql`reconciliation_runs.id`, runId))
+      .from(reconciliationRunsTable)
+      .where(eq(reconciliationRunsTable.id, runId))
       .limit(1);
 
     if (!run[0]) {
@@ -421,8 +425,8 @@ export class ReconciliationService {
 
     const items = await db
       .select()
-      .from(sql`reconciliation_items`)
-      .where(eq(sql`reconciliation_items.reconciliation_run_id`, runId));
+      .from(reconciliationItemsTable)
+      .where(eq(reconciliationItemsTable.reconciliationRunId, runId));
 
     return {
       run: run[0],
@@ -431,8 +435,8 @@ export class ReconciliationService {
         totalItems: items.length,
         matched: items.filter(i => i.status === 'matched').length,
         unmatched: items.filter(i => i.status !== 'matched').length,
-        pending: items.filter(i => i.resolution_status === 'pending').length,
-        resolved: items.filter(i => i.resolution_status === 'resolved').length,
+        pending: items.filter(i => i.resolutionStatus === 'pending').length,
+        resolved: items.filter(i => i.resolutionStatus === 'resolved').length,
       },
     };
   }
@@ -449,14 +453,14 @@ export class ReconciliationService {
     }
   ) {
     await db
-      .update(sql`reconciliation_items`)
+      .update(reconciliationItemsTable)
       .set({
-        resolution_status: resolution.status,
-        resolution_notes: resolution.notes,
-        resolved_by: resolution.resolvedBy,
-        resolved_at: new Date(),
+        resolutionStatus: resolution.status,
+        resolutionNotes: resolution.notes,
+        resolvedBy: resolution.resolvedBy,
+        resolvedAt: new Date(),
       })
-      .where(eq(sql`reconciliation_items.id`, itemId));
+      .where(eq(reconciliationItemsTable.id, itemId));
   }
 }
 

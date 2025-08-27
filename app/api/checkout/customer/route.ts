@@ -8,6 +8,7 @@ import { servicesTable } from "@/db/schema/enhanced-booking-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and } from "drizzle-orm";
 import { withRateLimitRedis } from "@/lib/rate-limit-redis";
+import { logApiStart, logApiSuccess, logApiError } from "@/lib/logger";
 import { createPaymentIntentWithIdempotency } from "@/lib/stripe-enhanced";
 import { calculateFees, dollarsToCents, MIN_TRANSACTION_CENTS } from "@/lib/payments/fee-calculator";
 import { generateConfirmationCode } from "@/lib/utils";
@@ -313,16 +314,13 @@ export const POST = withRateLimitRedis(
         status: "pending",
       });
       
-      // Log customer checkout for analytics
-      console.log("Customer checkout initiated:", {
+      // Log customer checkout for analytics (NO SENSITIVE DATA)
+      const logger = logApiStart("/api/checkout/customer", "POST", customer.id);
+      logApiSuccess(logger, "Customer checkout initiated", {
         bookingId: newBooking.id,
-        customerId: customer.id,
-        customerEmail: customer.email,
         providerId: provider.id,
-        serviceId: service.id,
-        amount: fees.displayAmounts.customerTotal,
-        noGuestSurcharge: true,
-        timestamp: new Date().toISOString(),
+        serviceId: service.id
+        // NOTE: Removed sensitive data like email and amounts
       });
       
       // Return success response with payment details
@@ -349,7 +347,8 @@ export const POST = withRateLimitRedis(
       );
       
     } catch (error) {
-      console.error("Customer checkout error:", error);
+      const logger = logApiStart("/api/checkout/customer", "POST");
+      logApiError(logger, "Customer checkout failed", error as Error);
       
       // Check for specific error types
       if (error instanceof z.ZodError) {

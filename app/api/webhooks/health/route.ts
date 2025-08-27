@@ -112,10 +112,10 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET /api/webhooks/health/alerts
- * Get webhook processing alerts
+ * Helper function to get webhook processing alerts
+ * Used internally by GET endpoint
  */
-export async function getAlerts(req: NextRequest) {
+async function getAlerts(req: NextRequest) {
   try {
     const alerts = [];
     

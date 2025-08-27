@@ -8,6 +8,7 @@ import { db } from "@/db/db";
 import { bookingsTable, transactionsTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { processWebhookWithIdempotency } from "@/lib/webhook-idempotency";
+import { logApiStart, logApiSuccess, logApiError, logger } from "@/lib/logger";
 
 const relevantEvents = new Set([
   "checkout.session.completed", 
@@ -43,13 +44,19 @@ export async function POST(req: NextRequest) {
     if (!sig || !webhookSecret) {
       // Log to security monitoring as per SECURITY-AUDIT.md
       // await logSecurityEvent({ type: 'WEBHOOK_SIGNATURE_MISSING', ip: req.headers.get('x-forwarded-for'), timestamp: new Date() });
-      console.error('Webhook secret or signature missing - potential attack');
+      logger.error('Webhook signature validation failed - potential attack', {
+        endpoint: '/api/stripe/webhooks',
+        reason: 'missing_signature_or_secret'
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err: any) {
-    console.error(`Webhook signature verification failed: ${err.message}`);
+    logger.error('Webhook signature verification failed', {
+      endpoint: '/api/stripe/webhooks',
+      reason: 'invalid_signature'
+    }, err);
     // Log to security monitoring as per SECURITY-AUDIT.md
     // await logSecurityEvent({ type: 'WEBHOOK_SIGNATURE_INVALID', ip: req.headers.get('x-forwarded-for'), timestamp: new Date(), details: err.message });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -57,7 +64,10 @@ export async function POST(req: NextRequest) {
 
   // Skip non-relevant events early
   if (!relevantEvents.has(event.type)) {
-    console.log(`Skipping non-relevant event type: ${event.type}`);
+    logger.debug('Skipping non-relevant webhook event', {
+      endpoint: '/api/stripe/webhooks',
+      eventType: event.type
+    });
     return NextResponse.json({ received: true });
   }
 
@@ -100,6 +110,14 @@ export async function POST(req: NextRequest) {
 
       case "transfer.created":
         await handleBookingTransferCreated(event, tx);
+        break;
+
+      case "transfer.paid":
+        await handleBookingTransferPaid(event, tx);
+        break;
+
+      case "transfer.failed":
+        await handleBookingTransferFailed(event, tx);
         break;
 
       default:

@@ -36,6 +36,11 @@ import {
   handleRateLimitError,
   withRateLimitAction 
 } from "@/lib/server-action-rate-limit";
+import {
+  checkSubscriptionEligibility,
+  recordSubscriptionUsage,
+} from "@/lib/subscription-service";
+import { awardBookingPoints } from "@/services/loyalty-service";
 
 // Create a new booking (customer action) with rate limiting
 export async function createBookingAction(data: {
@@ -47,7 +52,8 @@ export async function createBookingAction(data: {
   startTime: string;
   endTime: string;
   customerNotes?: string;
-}): Promise<ActionResult<Booking>> {
+  applySubscriptionBenefits?: boolean;
+}): Promise<ActionResult<Booking & { subscriptionApplied?: boolean; originalPrice?: number; discountApplied?: number }>> {
   try {
     // Apply rate limiting for booking creation
     await enforceRateLimit('booking');
@@ -72,16 +78,53 @@ export async function createBookingAction(data: {
       return { isSuccess: false, message: "Provider is not ready to accept bookings" };
     }
 
-    // Calculate fees
-    const totalAmount = data.servicePrice;
-    const platformFee = totalAmount * parseFloat(provider.commissionRate.toString());
-    const providerPayout = totalAmount - platformFee;
+    // Check for subscription benefits
+    let finalPrice = data.servicePrice;
+    let platformFee = 0;
+    let providerPayout = 0;
+    let totalAmount = 0;
+    let subscriptionApplied = false;
+    let originalPrice = data.servicePrice;
+    let discountApplied = 0;
+    let subscriptionId: string | undefined;
+
+    if (data.applySubscriptionBenefits !== false) {
+      const eligibility = await checkSubscriptionEligibility(
+        userId, 
+        data.providerId, 
+        data.servicePrice
+      );
+
+      if (eligibility.hasSubscription && eligibility.pricing && eligibility.eligibility.canUseService) {
+        // Apply subscription benefits
+        const pricing = eligibility.pricing;
+        finalPrice = pricing.finalPrice;
+        platformFee = pricing.platformFee;
+        providerPayout = pricing.providerPayout;
+        totalAmount = pricing.totalAmount;
+        subscriptionApplied = true;
+        discountApplied = pricing.discountApplied;
+        subscriptionId = eligibility.subscription?.subscriptionId;
+      } else if (!eligibility.eligibility.canUseService) {
+        return { 
+          isSuccess: false, 
+          message: eligibility.eligibility.reason || "Cannot use subscription for this service" 
+        };
+      }
+    }
+
+    // Fall back to regular fee calculation if no subscription applied
+    if (!subscriptionApplied) {
+      totalAmount = finalPrice;
+      platformFee = totalAmount * parseFloat(provider.commissionRate.toString());
+      providerPayout = totalAmount - platformFee;
+    }
 
     const bookingData: NewBooking = {
       providerId: data.providerId,
       customerId: userId,
       serviceName: data.serviceName,
-      servicePrice: data.servicePrice.toString(),
+      servicePrice: finalPrice.toString(),
       serviceDuration: data.serviceDuration,
       bookingDate: data.bookingDate,
       startTime: data.startTime,
@@ -91,20 +134,52 @@ export async function createBookingAction(data: {
       platformFee: platformFee.toString(),
       providerPayout: providerPayout.toString(),
       customerNotes: data.customerNotes,
+      metadata: subscriptionApplied ? {
+        subscriptionApplied: true,
+        subscriptionId,
+        originalPrice: originalPrice,
+        discountApplied: discountApplied,
+      } as any : {} as any,
     };
 
     const newBooking = await createBooking(bookingData);
     
+    // Record subscription usage if benefits were applied and service is included/discounted
+    if (subscriptionApplied && subscriptionId && (finalPrice === 0 || discountApplied > 0)) {
+      try {
+        await recordSubscriptionUsage(
+          subscriptionId,
+          newBooking.id,
+          `Booking created with subscription benefits: ${data.serviceName}`,
+          {
+            originalPrice,
+            finalPrice,
+            discountApplied,
+          }
+        );
+      } catch (usageError) {
+        console.error("Failed to record subscription usage:", usageError);
+        // Don't fail the booking creation, but log the error
+      }
+    }
+    
     // Audit log for security tracking
-    console.log(`[AUDIT] User ${userId} created booking ${newBooking.id} for provider ${data.providerId} at ${new Date().toISOString()}`);
+    console.log(`[AUDIT] User ${userId} created booking ${newBooking.id} for provider ${data.providerId} at ${new Date().toISOString()} ${subscriptionApplied ? '(subscription applied)' : ''}`);
     
     revalidatePath("/dashboard");
     revalidatePath(`/providers/${provider.slug}`);
     
     return { 
       isSuccess: true, 
-      message: "Booking created successfully", 
-      data: newBooking 
+      message: subscriptionApplied 
+        ? `Booking created successfully with subscription benefits (${discountApplied > 0 ? `$${discountApplied.toFixed(2)} discount` : 'included in subscription'})` 
+        : "Booking created successfully",
+      data: {
+        ...newBooking,
+        subscriptionApplied,
+        originalPrice: subscriptionApplied ? originalPrice : undefined,
+        discountApplied: subscriptionApplied ? discountApplied : undefined,
+      }
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Failed to create booking";
@@ -490,6 +565,29 @@ export async function completeBookingAction(
         "completed",
         { processedAt: new Date() }
       );
+    }
+    
+    // Award loyalty points to customer after booking completion
+    if (booking.customerId && booking.totalAmount) {
+      try {
+        const amountInCents = Math.floor(parseFloat(booking.totalAmount) * 100);
+        
+        // Use the loyalty service to award points
+        const loyaltyResult = await awardBookingPoints(
+          bookingId,
+          booking.customerId,
+          amountInCents
+        );
+        
+        if (loyaltyResult.success) {
+          console.log(`[LOYALTY] Awarded ${loyaltyResult.pointsEarned || 0} points to customer ${booking.customerId} for booking ${bookingId}`);
+        } else {
+          console.error(`[LOYALTY] Failed to award points for booking ${bookingId}:`, loyaltyResult.error);
+        }
+      } catch (loyaltyError) {
+        // Don't fail the booking completion if loyalty points fail
+        console.error(`[LOYALTY] Failed to award points for booking ${bookingId}:`, loyaltyError);
+      }
     }
     
     // Audit log for booking completion

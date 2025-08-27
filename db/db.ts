@@ -16,6 +16,33 @@ import {
   emailTemplatesTable, 
   emailBlacklistTable 
 } from "./schema/email-logs-schema";
+import {
+  loyaltyAccountsTable,
+  pointsTransactionsTable,
+  referralsTable,
+  loyaltyTiersTable,
+  loyaltyCampaignsTable,
+  redemptionOptionsTable
+} from "./schema/loyalty-schema";
+import {
+  pricingRulesTable,
+  demandMetricsTable,
+  priceAlertsTable,
+  surgePricingEventsTable,
+  priceHistoryTable,
+  competitorPricingTable
+} from "./schema/pricing-schema";
+import { servicesTable } from "./schema/enhanced-booking-schema";
+import {
+  subscriptionPlansTable,
+  customerSubscriptionsTable,
+  subscriptionBookingsTable,
+  subscriptionUsageTable
+} from "./schema/subscriptions-schema";
+import {
+  subscriptionUsageRecordsTable,
+  subscriptionUsageSummariesTable
+} from "./schema/subscription-usage-schema";
 
 // Define the schema properly
 const schema = { 
@@ -31,7 +58,26 @@ const schema = {
   emailLogs: emailLogsTable,
   emailEvents: emailEventsTable,
   emailTemplates: emailTemplatesTable,
-  emailBlacklist: emailBlacklistTable
+  emailBlacklist: emailBlacklistTable,
+  loyaltyAccounts: loyaltyAccountsTable,
+  pointsTransactions: pointsTransactionsTable,
+  referrals: referralsTable,
+  loyaltyTiers: loyaltyTiersTable,
+  loyaltyCampaigns: loyaltyCampaignsTable,
+  redemptionOptions: redemptionOptionsTable,
+  services: servicesTable,
+  pricingRules: pricingRulesTable,
+  demandMetrics: demandMetricsTable,
+  priceAlerts: priceAlertsTable,
+  surgePricingEvents: surgePricingEventsTable,
+  priceHistory: priceHistoryTable,
+  competitorPricing: competitorPricingTable,
+  subscriptionPlans: subscriptionPlansTable,
+  customerSubscriptions: customerSubscriptionsTable,
+  subscriptionBookings: subscriptionBookingsTable,
+  subscriptionUsage: subscriptionUsageTable,
+  subscriptionUsageRecords: subscriptionUsageRecordsTable,
+  subscriptionUsageSummaries: subscriptionUsageSummariesTable
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment

@@ -16,6 +16,8 @@ export interface AuthContext {
   role: UserRole;
   providerId?: string;
   isAuthenticated: boolean;
+  email?: string;
+  name?: string;
 }
 
 /**
@@ -62,6 +64,7 @@ export async function getUserRole(userId: string): Promise<UserRole> {
  */
 export async function requireAuth(req: NextRequest): Promise<AuthContext | NextResponse> {
   const { userId } = auth();
+  const user = await currentUser();
 
   if (!userId) {
     return NextResponse.json(
@@ -90,7 +93,9 @@ export async function requireAuth(req: NextRequest): Promise<AuthContext | NextR
     userId,
     role,
     providerId,
-    isAuthenticated: true
+    isAuthenticated: true,
+    email: user?.emailAddresses?.[0]?.emailAddress,
+    name: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined
   };
 }
 
@@ -124,6 +129,7 @@ export async function requireRole(
  */
 export async function allowGuest(req: NextRequest): Promise<AuthContext> {
   const { userId } = auth();
+  const user = await currentUser();
 
   if (!userId) {
     return {
@@ -153,7 +159,9 @@ export async function allowGuest(req: NextRequest): Promise<AuthContext> {
     userId,
     role,
     providerId,
-    isAuthenticated: true
+    isAuthenticated: true,
+    email: user?.emailAddresses?.[0]?.emailAddress,
+    name: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined
   };
 }
 

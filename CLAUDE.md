@@ -162,6 +162,54 @@ const { success } = await ratelimit.limit(ip);
 if (!success) return new Response('Too Many Requests', { status: 429 });
 ```
 
+## 🤖 Agent System
+
+### Core Architecture
+**Agent Orchestration**: AI-powered agent system with task delegation and workflow automation
+- **5 Core Agents**: Core, UI, Database, Payments, Security (see `/lib/agents/runners/`)
+- **8 MCP Servers**: Sequential thinking, filesystem, memory, GitHub, Notion, IDE, Vercel, Postgres
+- **Task Distribution**: Capability-based matching with priority queuing
+- **Workflow Engine**: Graph-based DAG execution with checkpoints
+
+### Agent Commands
+```bash
+# Agent System Management
+curl http://localhost:3000/api/agents/status    # System health check
+curl http://localhost:3000/api/agents/tasks     # View all tasks
+curl -X POST http://localhost:3000/api/agents/init  # Initialize agents
+
+# Monitor agents via admin dashboard
+# Navigate to: http://localhost:3000/admin/agents
+```
+
+### Agent Configuration
+Configure agents via environment variables in `.env.local`:
+```bash
+# Core settings
+AGENTS_ENABLED=true
+AGENT_AUTO_INITIALIZE=true
+AGENT_TASK_TIMEOUT=300000
+AGENT_MAX_CONCURRENT_TASKS=10
+
+# Enable/disable MCP servers
+MCP_SEQUENTIAL_THINKING_ENABLED=true
+MCP_FILESYSTEM_ENABLED=true
+MCP_POSTGRES_ENABLED=true
+# ... see .env.stripe.example for full list
+
+# Security & resources
+AGENT_SANDBOX_MODE=true
+AGENT_MEMORY_LIMIT_MB=512
+AGENT_REQUIRE_HUMAN_APPROVAL=true
+```
+
+### Agent Capabilities
+- **Core Agent**: Task coordination, planning, decision-making
+- **UI Agent**: Component generation, refactoring, styling
+- **DB Agent**: Schema design, migrations, query optimization
+- **Payments Agent**: Stripe integration, reconciliation, fraud detection
+- **Security Agent**: Vulnerability scanning, compliance auditing, threat modeling
+
 ## ⚠️ Common Pitfalls & Solutions
 
 | Issue | Solution |
@@ -171,6 +219,8 @@ if (!success) return new Response('Too Many Requests', { status: 429 });
 | Type errors in build | Run `npm run type-check` before committing |
 | Guest checkout failing | Verify rate limiting Redis is configured |
 | Webhook processed multiple times | Check webhook_events table for idempotency |
+| Agents not initializing | Check `/api/agents/status` and MCP server health |
+| Agent tasks failing | Review task logs in admin dashboard at `/admin/agents` |
 
 ## 📊 Performance Targets
 
@@ -197,12 +247,28 @@ INITIATED → PENDING_PROVIDER → ACCEPTED → PAYMENT_PENDING → PAYMENT_SUCC
 5. Webhook updates booking state
 6. UI polls for status updates (resilient to webhook delays)
 
+### Agent Task States
+```
+PENDING → ASSIGNED → IN_PROGRESS → COMPLETED
+   ↓         ↓            ↓            ↓
+CANCELLED  FAILED    CANCELLED   ARCHIVED
+```
+
+### Agent Workflow Execution
+1. Task created via API or auto-generated
+2. Orchestrator matches task to capable agent
+3. Agent receives task and begins execution
+4. Progress tracked with checkpoints
+5. Results returned and stored
+6. Human approval required for sensitive operations
+
 ## 📝 Development Workflow
 
 1. **Before starting work**: 
    - Run `supabase start` for local DB
    - Run `npm run dev` for dev server
    - Run `npm run stripe:listen` if testing payments
+   - Visit `/admin/agents` to initialize agent system
 
 2. **Before committing**:
    - Run `npm run type-check` - MUST pass
@@ -220,6 +286,7 @@ INITIATED → PENDING_PROVIDER → ACCEPTED → PAYMENT_PENDING → PAYMENT_SUCC
 # Check if all services are running
 supabase status                    # Database status
 curl http://localhost:3000/api/health  # API health check
+curl http://localhost:3000/api/agents/status  # Agent system status
 npm run redis:check                 # Redis connectivity
 
 # View logs

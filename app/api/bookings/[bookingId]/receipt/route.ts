@@ -7,11 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
-import { 
-  bookingsTable, 
-  transactionsTable, 
-  profilesTable 
-} from "@/db/schema/enhanced-booking-schema";
+import { bookingsTable, transactionsTable } from "@/db/schema/bookings-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and } from "drizzle-orm";
 import { withRateLimitRedis } from "@/lib/rate-limit-redis";
 

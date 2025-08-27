@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { BookingHistory } from "@/components/customer/dashboard/BookingHistory";
 import { CustomerMetrics } from "@/components/customer/dashboard/CustomerMetrics";
 import { QuickActions } from "@/components/customer/dashboard/QuickActions";
+import LoyaltyWidget from "@/components/loyalty/loyalty-widget";
 import { 
   Calendar, 
   Clock, 
@@ -28,7 +29,8 @@ import {
   Plus, 
   Search,
   Star,
-  TrendingUp
+  TrendingUp,
+  Sparkles
 } from "lucide-react";
 import Link from "next/link";
 
@@ -217,6 +219,11 @@ export default async function CustomerDashboardPage() {
         </div>
       )}
 
+      {/* Loyalty Points Widget */}
+      <div className="mb-8">
+        <LoyaltyWidget compact className="shadow-sm" />
+      </div>
+
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Upcoming Bookings */}
@@ -310,6 +317,13 @@ export default async function CustomerDashboardPage() {
               <Link href="/dashboard/customer/payments">
                 <DollarSign className="h-4 w-4 mr-2" />
                 Payment History
+              </Link>
+            </Button>
+            
+            <Button variant="outline" className="w-full justify-start" asChild>
+              <Link href="/dashboard/loyalty">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Loyalty Program
               </Link>
             </Button>
             

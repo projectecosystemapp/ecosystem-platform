@@ -48,6 +48,9 @@ export const bookingsTable = pgTable("bookings", {
   cancellationReason: text("cancellation_reason"),
   cancelledBy: text("cancelled_by")
     .references(() => profilesTable.userId, { onDelete: "set null" }), // SET NULL: Allow null if cancelling user is deleted
+  
+  // Group booking flag
+  isGroupBooking: boolean("is_group_booking").default(false),
   cancelledAt: timestamp("cancelled_at"),
   
   // Booking confirmation

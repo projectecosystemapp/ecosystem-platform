@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { searchProviders, getFeaturedProviders } from "@/db/queries/providers-queries";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
+import { createSecureApiHandler } from "@/lib/security/api-handler";
 
 /**
  * Provider Search and Listing API
@@ -23,7 +24,7 @@ const searchFiltersSchema = z.object({
   page: z.coerce.number().min(1).optional(),
 });
 
-export async function GET(req: NextRequest) {
+async function handleGetProviders(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     
@@ -144,6 +145,18 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+// Apply secure API handler with validation
+export const GET = createSecureApiHandler(
+  handleGetProviders,
+  {
+    requireAuth: false, // Public API
+    validateQuery: searchFiltersSchema,
+    rateLimit: { requests: 100, window: '1m' },
+    auditLog: false, // Don't log every provider search
+    allowedMethods: ['GET', 'HEAD'],
+  }
+);
 
 /**
  * Health check endpoint for providers API

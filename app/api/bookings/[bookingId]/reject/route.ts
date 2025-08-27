@@ -32,7 +32,7 @@ const rejectBookingSchema = z.object({
 });
 
 // Predefined rejection reasons
-export const REJECTION_REASONS = {
+const REJECTION_REASONS = {
   UNAVAILABLE: 'Provider is unavailable at the requested time',
   FULLY_BOOKED: 'Provider is fully booked for this date',
   SERVICE_NOT_AVAILABLE: 'Service is not available at this location',
