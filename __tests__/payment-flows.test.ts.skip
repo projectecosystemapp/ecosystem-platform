@@ -33,10 +33,10 @@ jest.mock('@/lib/stripe', () => ({
 
 jest.mock('@/db/db', () => ({
   db: {
-    select: jest.fn(),
-    insert: jest.fn(),
-    update: jest.fn(),
-    transaction: jest.fn(),
+    select: jest.fn() as any,
+    insert: jest.fn() as any,
+    update: jest.fn() as any,
+    transaction: jest.fn() as any,
   },
 }));
 
@@ -95,24 +95,24 @@ describe('Payment Flow Tests', () => {
         const expectedTotalAmount = 11000; // $100 + $10 = $110
 
         // Mock auth for guest
-        mockAuth.mockResolvedValue({ userId: null });
+        mockAuth.mockResolvedValue({ userId: null } as any);
 
         // Mock database queries
-        mockDb.select.mockImplementation(() => ({
+        (mockDb.select as any).mockImplementation(() => ({
           from: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockResolvedValue([mockBooking]),
+          limit: jest.fn().mockResolvedValue([mockBooking] as any),
         }));
 
         // Mock provider query
-        mockDb.select.mockImplementationOnce(() => ({
+        (mockDb.select as any).mockImplementationOnce(() => ({
           from: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockResolvedValue([mockBooking]),
+          limit: jest.fn().mockResolvedValue([mockBooking] as any),
         })).mockImplementationOnce(() => ({
           from: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockResolvedValue([mockProvider]),
+          limit: jest.fn().mockResolvedValue([mockProvider] as any),
         }));
 
         // Mock Stripe payment intent creation
@@ -190,21 +190,21 @@ describe('Payment Flow Tests', () => {
         mockAuth.mockResolvedValue({ userId: testUserId });
 
         // Mock database queries
-        mockDb.select.mockImplementation(() => ({
+        (mockDb.select as any).mockImplementation(() => ({
           from: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockResolvedValue([mockBooking]),
+          limit: jest.fn().mockResolvedValue([mockBooking] as any),
         }));
 
         // Mock provider query
-        mockDb.select.mockImplementationOnce(() => ({
+        (mockDb.select as any).mockImplementationOnce(() => ({
           from: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockResolvedValue([mockBooking]),
+          limit: jest.fn().mockResolvedValue([mockBooking] as any),
         })).mockImplementationOnce(() => ({
           from: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockResolvedValue([mockProvider]),
+          limit: jest.fn().mockResolvedValue([mockProvider] as any),
         }));
 
         // Mock Stripe payment intent creation
@@ -282,20 +282,20 @@ describe('Payment Flow Tests', () => {
           mockAuth.mockResolvedValue({ userId: testUserId });
 
           // Mock database queries
-          mockDb.select.mockImplementation(() => ({
+          (mockDb.select as any).mockImplementation(() => ({
             from: jest.fn().mockReturnThis(),
             where: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockResolvedValue([mockBooking]),
+            limit: jest.fn().mockResolvedValue([mockBooking] as any),
           }));
 
-          mockDb.select.mockImplementationOnce(() => ({
+          (mockDb.select as any).mockImplementationOnce(() => ({
             from: jest.fn().mockReturnThis(),
             where: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockResolvedValue([mockBooking]),
+            limit: jest.fn().mockResolvedValue([mockBooking] as any),
           })).mockImplementationOnce(() => ({
             from: jest.fn().mockReturnThis(),
             where: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockResolvedValue([mockProvider]),
+            limit: jest.fn().mockResolvedValue([mockProvider] as any),
           }));
 
           // Mock Stripe
@@ -347,7 +347,7 @@ describe('Payment Flow Tests', () => {
       mockAuth.mockResolvedValue({ userId: testUserId });
 
       // Mock booking retrieval
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([{
@@ -419,7 +419,7 @@ describe('Payment Flow Tests', () => {
         stripePaymentIntentId: testPaymentIntentId,
       };
 
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([bookingWithPayment]),
@@ -476,7 +476,7 @@ describe('Payment Flow Tests', () => {
         status: 'confirmed',
       };
 
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([completedBooking]),
@@ -541,13 +541,13 @@ describe('Payment Flow Tests', () => {
       mockAuth.mockResolvedValue({ userId: testUserId });
 
       // Mock database queries
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
       }));
 
-      mockDb.select.mockImplementationOnce(() => ({
+      (mockDb.select as any).mockImplementationOnce(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
@@ -613,13 +613,13 @@ describe('Payment Flow Tests', () => {
       mockAuth.mockResolvedValue({ userId: testUserId });
 
       // Mock database queries
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
       }));
 
-      mockDb.select.mockImplementationOnce(() => ({
+      (mockDb.select as any).mockImplementationOnce(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
@@ -679,13 +679,13 @@ describe('Payment Flow Tests', () => {
       // Step 1: Create payment intent
       mockAuth.mockResolvedValue({ userId: testUserId });
 
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
       }));
 
-      mockDb.select.mockImplementationOnce(() => ({
+      (mockDb.select as any).mockImplementationOnce(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
@@ -742,10 +742,10 @@ describe('Payment Flow Tests', () => {
 
       mockStripe.webhooks.constructEvent.mockReturnValue(webhookPayload as Stripe.Event);
 
-      mockDb.select.mockImplementationOnce(() => ({
+      (mockDb.select as any).mockImplementationOnce(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([]), // No existing webhook event
+        limit: jest.fn().mockResolvedValue([] as any), // No existing webhook event
       }));
 
       const txMock = {
@@ -788,7 +788,7 @@ describe('Payment Flow Tests', () => {
 
       mockAuth.mockResolvedValue({ userId: testUserId });
 
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([completedBooking]),
@@ -855,7 +855,7 @@ describe('Payment Flow Tests', () => {
 
       mockAuth.mockResolvedValue({ userId: testUserId });
 
-      mockDb.select.mockImplementationOnce(() => ({
+      (mockDb.select as any).mockImplementationOnce(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
@@ -885,7 +885,7 @@ describe('Payment Flow Tests', () => {
     it('should handle unauthorized access to booking', async () => {
       mockAuth.mockResolvedValue({ userId: 'different_user' });
 
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
@@ -911,13 +911,13 @@ describe('Payment Flow Tests', () => {
     it('should handle Stripe API errors gracefully', async () => {
       mockAuth.mockResolvedValue({ userId: testUserId });
 
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
       }));
 
-      mockDb.select.mockImplementationOnce(() => ({
+      (mockDb.select as any).mockImplementationOnce(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([mockBooking]),
@@ -977,7 +977,7 @@ describe('Payment Flow Tests', () => {
 
       mockAuth.mockResolvedValue({ userId: testUserId });
 
-      mockDb.select.mockImplementation(() => ({
+      (mockDb.select as any).mockImplementation(() => ({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue([completedBooking]),

@@ -519,6 +519,16 @@ export class AgentRegistry {
   }
 
   /**
+   * Clear all agents and indexes (for testing)
+   */
+  public clear(): void {
+    this.agents.clear();
+    this.capabilityIndex.clear();
+    this.specializationIndex.clear();
+    this.initializeIndexes();
+  }
+
+  /**
    * Cleanup resources
    */
   public dispose(): void {

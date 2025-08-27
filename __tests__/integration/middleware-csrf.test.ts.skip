@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkMiddleware } from '@clerk/nextjs/server';
 import middleware from '@/middleware'; // Import the actual middleware
@@ -11,10 +11,46 @@ jest.mock('@clerk/nextjs/server', () => ({
     sessionClaims: { metadata: { role: 'user' } },
     protect: jest.fn(),
   })),
-  clerkMiddleware: jest.fn((handler) => handler),
+  clerkMiddleware: jest.fn((handler: any) => (req: NextRequest, evt?: any) => {
+    const mockAuth = () => ({
+      userId: 'user_test_123',
+      sessionClaims: { metadata: { role: 'user' } },
+      protect: jest.fn(),
+    });
+    return handler(mockAuth, req);
+  }),
+  createRouteMatcher: jest.fn((patterns: any) => (req: any) => {
+    const url = req.nextUrl || req.url;
+    const pathname = typeof url === 'string' ? new URL(url).pathname : url.pathname;
+    return patterns.some((pattern: string) => pathname.match(pattern.replace('(.*)','.*')));
+  }),
 }));
 
-// Mock the actual middleware's dependencies if needed, but for CSRF, it mostly relies on NextRequest/Response
+// Mock rate limiting
+jest.mock('@/lib/security/rate-limit', () => ({
+  rateLimit: jest.fn(() => Promise.resolve({ success: true, headers: new Map() })),
+  getRateLimitConfig: jest.fn(() => ({ limit: 100, window: 60000 })),
+}));
+
+// Mock CSP nonce generation
+jest.mock('@/lib/security/csp-nonce', () => ({
+  generateNonce: jest.fn(() => 'test-nonce-123'),
+  generateCSPHeader: jest.fn(() => 'default-src self'),
+}));
+
+// Mock security headers
+jest.mock('@/lib/security/headers', () => ({
+  applySecurityHeaders: jest.fn((response, nonce) => response),
+  applyCORSHeaders: jest.fn((req, response, config) => response),
+  RouteType: {
+    PUBLIC: 'public',
+    API: 'api',
+    AUTHENTICATED: 'authenticated',
+    ADMIN: 'admin',
+    WEBHOOK: 'webhook',
+  },
+  getSecurityHeadersForRoute: jest.fn(() => new Map()),
+}));
 
 describe('Middleware CSRF Protection', () => {
   const originalEnv = process.env;

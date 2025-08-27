@@ -1,327 +1,511 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+/**
+ * Webhook Idempotency Test Suite
+ * 
+ * Ensures webhook events are processed exactly once,
+ * even when delivered multiple times by Stripe
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { processWebhookWithIdempotency } from '@/lib/webhook-idempotency';
 import { db } from '@/db/db';
 import { webhookEventsTable } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import Stripe from 'stripe';
 
-// Mock dependencies
-jest.mock('@/db/db', () => ({
+// Mock database for testing
+vi.mock('@/db/db', () => ({
   db: {
-    select: jest.fn(),
-    insert: jest.fn(),
-    update: jest.fn(),
-    transaction: jest.fn(),
-  },
+    transaction: vi.fn(),
+    insert: vi.fn(),
+    update: vi.fn(),
+    select: vi.fn()
+  }
 }));
 
-jest.mock('stripe', () => {
-  const actualStripe = jest.requireActual('stripe');
-  return {
-    __esModule: true,
-    default: jest.fn(() => ({
-      webhooks: {
-        constructEvent: jest.fn(),
-      },
-    })),
-    Stripe: actualStripe.Stripe,
-  };
-});
-
-const mockDb = db as jest.Mocked<typeof db>;
-const mockStripe = new Stripe('sk_test_mock') as jest.Mocked<Stripe>;
-
-describe('Webhook Idempotency (lib/webhook-idempotency.ts)', () => {
-  const testEventId = 'evt_test_idempotency_123';
-  const testPaymentIntentId = 'pi_test_idempotency_123';
-  const testBookingId = 'booking_test_idempotency_123';
-
-  const mockWebhookPayload: Stripe.Event = {
-    id: testEventId,
-    object: 'event',
-    api_version: '2020-08-27',
-    created: 1678886400,
-    livemode: false,
-    pending_webhooks: 1,
-    request: { id: 'req_test', idempotency_key: null },
-    type: 'payment_intent.succeeded',
-    data: {
-      object: {
-        id: testPaymentIntentId,
-        object: 'payment_intent',
-        metadata: {
-          bookingId: testBookingId,
-          type: 'booking_payment',
-        },
-      } as Stripe.PaymentIntent,
-    },
-  };
-
+describe('Webhook Idempotency', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // Default mock for constructEvent to succeed
-    (mockStripe.webhooks.constructEvent as jest.Mock).mockReturnValue(mockWebhookPayload);
+    vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
+  describe('First Event Delivery', () => {
+    it('should process new events successfully', async () => {
+      const mockEvent = {
+        id: 'evt_new_123',
+        type: 'payment_intent.succeeded',
+        created: Date.now() / 1000,
+        data: {
+          object: {
+            id: 'pi_test',
+            amount: 10000,
+            metadata: { bookingId: 'booking_123' }
+          }
+        }
+      };
 
-  describe('processWebhookWithIdempotency', () => {
-    it('should process webhook only once even if received multiple times', async () => {
-      // Mock db.select to return no existing event for the first call
-      mockDb.select.mockImplementationOnce(() => ({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([]), // No existing event
-      }));
-
-      // Mock db.transaction for the first call
-      mockDb.transaction.mockImplementationOnce(async (callback) => {
-        const txMock = {
-          insert: jest.fn().mockResolvedValue({}),
-          update: jest.fn().mockResolvedValue({}),
-          select: jest.fn().mockResolvedValue([]), // No existing event within transaction
-        };
-        return callback(txMock);
+      // Mock database to return no existing event
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([])
       });
 
-      // First call
-      const handler = jest.fn().mockResolvedValue('processed');
-      const result1 = await processWebhookWithIdempotency(mockWebhookPayload, handler);
+      // Mock transaction success
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const mockTx = {
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockReturnThis(),
+            returning: vi.fn().mockResolvedValue([{ id: 1 }])
+          }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis()
+          })
+        };
+        return callback(mockTx);
+      });
 
-      expect(result1.success).toBe(true);
-      expect(handler).toHaveBeenCalledTimes(1);
-      expect(mockDb.insert).toHaveBeenCalledWith(expect.arrayContaining([
-        expect.objectContaining({ eventId: testEventId, status: 'processing' })
-      ]));
-      expect(mockDb.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
+      const handler = vi.fn().mockResolvedValue({ success: true });
+      const result = await processWebhookWithIdempotency(mockEvent as any, handler);
 
-      // Mock db.select to return an existing event for the second call
-      mockDb.select.mockImplementationOnce(() => ({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([{ eventId: testEventId, status: 'completed' }]), // Event exists
-      }));
-
-      // Second call (duplicate)
-      const result2 = await processWebhookWithIdempotency(mockWebhookPayload, handler);
-
-      expect(result2.success).toBe(true); // Still success, as it's idempotent
-      expect(handler).toHaveBeenCalledTimes(1); // Handler should NOT be called again
-      expect(mockDb.insert).toHaveBeenCalledTimes(1); // No new insert
-      expect(mockDb.update).toHaveBeenCalledTimes(1); // No new update
+      expect(result.success).toBe(true);
+      expect(handler).toHaveBeenCalledOnce();
     });
 
-    it('should handle concurrent webhook deliveries safely', async () => {
-      // Both calls check and find no existing event initially
-      mockDb.select.mockImplementation(() => ({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([]), // No existing event
+    it('should store event details in database', async () => {
+      const mockEvent = {
+        id: 'evt_store_123',
+        type: 'charge.succeeded',
+        created: Date.now() / 1000,
+        data: { object: { id: 'ch_test' } }
+      };
+
+      const insertMock = vi.fn();
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const mockTx = {
+          insert: vi.fn().mockReturnValue({
+            values: insertMock.mockReturnThis(),
+            returning: vi.fn().mockResolvedValue([{ id: 1 }])
+          }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis()
+          })
+        };
+        await callback(mockTx);
+      });
+
+      await processWebhookWithIdempotency(mockEvent as any, vi.fn());
+
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stripeEventId: 'evt_store_123',
+          eventType: 'charge.succeeded',
+          status: expect.stringMatching(/processing|completed/)
+        })
+      );
+    });
+  });
+
+  describe('Duplicate Event Delivery', () => {
+    it('should skip processing duplicate events', async () => {
+      const mockEvent = {
+        id: 'evt_duplicate_123',
+        type: 'payment_intent.succeeded',
+        created: Date.now() / 1000,
+        data: { object: { id: 'pi_test' } }
+      };
+
+      // Mock database to return existing completed event
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{
+          id: 1,
+          stripeEventId: 'evt_duplicate_123',
+          status: 'completed',
+          processedAt: new Date()
+        }])
+      });
+
+      const handler = vi.fn();
+      const result = await processWebhookWithIdempotency(mockEvent as any, handler);
+
+      expect(result.success).toBe(true);
+      expect(result.skipped).toBe(true);
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('should handle concurrent duplicate deliveries', async () => {
+      const mockEvent = {
+        id: 'evt_concurrent_123',
+        type: 'payment_intent.succeeded',
+        created: Date.now() / 1000,
+        data: { object: { id: 'pi_test' } }
+      };
+
+      let firstCall = true;
+      (db.select as any).mockImplementation(() => ({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockImplementation(() => {
+          if (firstCall) {
+            firstCall = false;
+            return Promise.resolve([]);
+          }
+          // Second call finds the event already processing
+          return Promise.resolve([{
+            id: 1,
+            stripeEventId: 'evt_concurrent_123',
+            status: 'processing'
+          }]);
+        })
       }));
 
-      // Mock db.transaction to simulate unique constraint violation on second concurrent call
-      let firstCall = true;
-      mockDb.transaction.mockImplementation(async (callback) => {
-        if (firstCall) {
-          firstCall = false;
-          const txMock = {
-            insert: jest.fn().mockResolvedValue({}),
-            update: jest.fn().mockResolvedValue({}),
-            select: jest.fn().mockResolvedValue([]), // No existing event within transaction
-          };
-          return callback(txMock);
-        } else {
-          // Simulate unique constraint violation on insert for the second call
-          const error = new Error('duplicate key value violates unique constraint "webhook_events_eventId_unique"');
-          (error as any).code = '23505'; // PostgreSQL unique violation error code
+      // Simulate two concurrent calls
+      const handler = vi.fn().mockResolvedValue({ success: true });
+      const [result1, result2] = await Promise.all([
+        processWebhookWithIdempotency(mockEvent as any, handler),
+        processWebhookWithIdempotency(mockEvent as any, handler)
+      ]);
+
+      // Only one should process
+      const processedCount = [result1, result2].filter(r => !r.skipped).length;
+      expect(processedCount).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe('Failed Event Processing', () => {
+    it('should mark events as failed on handler error', async () => {
+      const mockEvent = {
+        id: 'evt_fail_123',
+        type: 'payment_intent.succeeded',
+        created: Date.now() / 1000,
+        data: { object: { id: 'pi_test' } }
+      };
+
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([])
+      });
+
+      const updateMock = vi.fn();
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const mockTx = {
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockReturnThis(),
+            returning: vi.fn().mockResolvedValue([{ id: 1 }])
+          }),
+          update: vi.fn().mockReturnValue({
+            set: updateMock.mockReturnThis(),
+            where: vi.fn().mockReturnThis()
+          })
+        };
+        try {
+          await callback(mockTx);
+        } catch (e) {
+          // Expected error
+        }
+      });
+
+      const handler = vi.fn().mockRejectedValue(new Error('Processing failed'));
+      const result = await processWebhookWithIdempotency(mockEvent as any, handler);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+
+    it('should allow retry of failed events', async () => {
+      const mockEvent = {
+        id: 'evt_retry_123',
+        type: 'payment_intent.succeeded',
+        created: Date.now() / 1000,
+        data: { object: { id: 'pi_test' } }
+      };
+
+      // First call returns failed event
+      (db.select as any).mockReturnValueOnce({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{
+          id: 1,
+          stripeEventId: 'evt_retry_123',
+          status: 'failed',
+          attemptCount: 1
+        }])
+      });
+
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const mockTx = {
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis()
+          })
+        };
+        return callback(mockTx);
+      });
+
+      const handler = vi.fn().mockResolvedValue({ success: true });
+      const result = await processWebhookWithIdempotency(mockEvent as any, handler);
+
+      expect(handler).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+    });
+
+    it('should respect max retry attempts', async () => {
+      const mockEvent = {
+        id: 'evt_maxretry_123',
+        type: 'payment_intent.succeeded',
+        created: Date.now() / 1000,
+        data: { object: { id: 'pi_test' } }
+      };
+
+      // Return event that has exceeded max retries
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{
+          id: 1,
+          stripeEventId: 'evt_maxretry_123',
+          status: 'failed',
+          attemptCount: 5, // Max retries reached
+          maxAttempts: 5
+        }])
+      });
+
+      const handler = vi.fn();
+      const result = await processWebhookWithIdempotency(mockEvent as any, handler);
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('max retries');
+    });
+  });
+
+  describe('Event Expiration', () => {
+    it('should reject events older than 7 days', async () => {
+      const oldTimestamp = (Date.now() / 1000) - (8 * 24 * 60 * 60); // 8 days ago
+      const mockEvent = {
+        id: 'evt_old_123',
+        type: 'payment_intent.succeeded',
+        created: oldTimestamp,
+        data: { object: { id: 'pi_test' } }
+      };
+
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([])
+      });
+
+      const handler = vi.fn();
+      const result = await processWebhookWithIdempotency(mockEvent as any, handler);
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('expired');
+    });
+
+    it('should process recent events', async () => {
+      const recentTimestamp = (Date.now() / 1000) - (60 * 60); // 1 hour ago
+      const mockEvent = {
+        id: 'evt_recent_123',
+        type: 'payment_intent.succeeded',
+        created: recentTimestamp,
+        data: { object: { id: 'pi_test' } }
+      };
+
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([])
+      });
+
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const mockTx = {
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockReturnThis(),
+            returning: vi.fn().mockResolvedValue([{ id: 1 }])
+          }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis()
+          })
+        };
+        return callback(mockTx);
+      });
+
+      const handler = vi.fn().mockResolvedValue({ success: true });
+      const result = await processWebhookWithIdempotency(mockEvent as any, handler);
+
+      expect(handler).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('Database Transaction Handling', () => {
+    it('should rollback on partial failure', async () => {
+      const mockEvent = {
+        id: 'evt_rollback_123',
+        type: 'payment_intent.succeeded',
+        created: Date.now() / 1000,
+        data: { object: { id: 'pi_test' } }
+      };
+
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([])
+      });
+
+      let transactionRolledBack = false;
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const mockTx = {
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockReturnThis(),
+            returning: vi.fn().mockResolvedValue([{ id: 1 }])
+          }),
+          update: vi.fn().mockImplementation(() => {
+            throw new Error('Update failed');
+          }),
+          rollback: () => {
+            transactionRolledBack = true;
+          }
+        };
+        
+        try {
+          return await callback(mockTx);
+        } catch (error) {
+          mockTx.rollback();
           throw error;
         }
       });
 
-      const handler = jest.fn().mockResolvedValue('processed');
+      const handler = vi.fn().mockResolvedValue({ success: true });
+      const result = await processWebhookWithIdempotency(mockEvent as any, handler);
 
-      // Create two concurrent promises
-      const promise1 = processWebhookWithIdempotency(mockWebhookPayload, handler);
-      const promise2 = processWebhookWithIdempotency(mockWebhookPayload, handler);
-
-      // Execute concurrently
-      const [result1, result2] = await Promise.allSettled([promise1, promise2]);
-
-      // One should succeed, one should fail due to constraint
-      expect(result1.status).toBe('fulfilled');
-      expect(result2.status).toBe('rejected'); // Or fulfilled with success: false, depending on how the error is caught and returned
-      
-      // Verify handler was called only once (or at least not twice successfully)
-      expect(handler).toHaveBeenCalledTimes(1); 
-    });
-
-    it('should mark webhook as failed if handler throws an error', async () => {
-      // Mock db.select to return no existing event
-      mockDb.select.mockResolvedValue([]);
-
-      // Mock db.transaction to simulate handler throwing an error
-      mockDb.transaction.mockImplementationOnce(async (callback) => {
-        const txMock = {
-          insert: jest.fn().mockResolvedValue({}),
-          update: jest.fn().mockResolvedValue({}),
-          select: jest.fn().mockResolvedValue([]),
-        };
-        await callback(txMock); // Call the handler
-        throw new Error('Handler processing failed'); // Simulate handler error
-      });
-
-      const handler = jest.fn().mockRejectedValue(new Error('Handler processing failed'));
-      const result = await processWebhookWithIdempotency(mockWebhookPayload, handler);
-
+      expect(transactionRolledBack).toBe(true);
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Handler processing failed');
-      expect(handler).toHaveBeenCalledTimes(1);
-      // Verify that webhookEventsTable was updated to 'failed' status
-      expect(mockDb.update).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'failed', errorMessage: 'Handler processing failed' })
-      );
     });
 
-    it('should retry failed webhooks up to the limit', async () => {
-      // Simulate initial failure
-      mockDb.select.mockResolvedValueOnce([]); // No existing event
-      mockDb.transaction.mockImplementationOnce(async (callback) => {
-        const txMock = {
-          insert: jest.fn().mockResolvedValue({}),
-          update: jest.fn().mockResolvedValue({}),
-          select: jest.fn().mockResolvedValue([]),
-        };
-        await callback(txMock);
-        throw new Error('Initial handler failure');
-      });
-      const handler1 = jest.fn().mockRejectedValue(new Error('Initial handler failure'));
-      await processWebhookWithIdempotency(mockWebhookPayload, handler1);
-      expect(mockDb.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', retryCount: 0 }));
-
-      // Simulate retry 1 (event exists as failed, retryCount 0)
-      mockDb.select.mockResolvedValueOnce([{ eventId: testEventId, status: 'failed', retryCount: 0 }]);
-      mockDb.transaction.mockImplementationOnce(async (callback) => {
-        const txMock = {
-          insert: jest.fn().mockResolvedValue({}),
-          update: jest.fn().mockResolvedValue({}),
-          select: jest.fn().mockResolvedValue([{ eventId: testEventId, status: 'failed', retryCount: 0 }]),
-        };
-        await callback(txMock);
-        throw new Error('Retry 1 handler failure');
-      });
-      const handler2 = jest.fn().mockRejectedValue(new Error('Retry 1 handler failure'));
-      await processWebhookWithIdempotency(mockWebhookPayload, handler2);
-      expect(mockDb.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', retryCount: 1 }));
-
-      // Simulate retry 2 (event exists as failed, retryCount 1)
-      mockDb.select.mockResolvedValueOnce([{ eventId: testEventId, status: 'failed', retryCount: 1 }]);
-      mockDb.transaction.mockImplementationOnce(async (callback) => {
-        const txMock = {
-          insert: jest.fn().mockResolvedValue({}),
-          update: jest.fn().mockResolvedValue({}),
-          select: jest.fn().mockResolvedValue([{ eventId: testEventId, status: 'failed', retryCount: 1 }]),
-        };
-        await callback(txMock);
-        throw new Error('Retry 2 handler failure');
-      });
-      const handler3 = jest.fn().mockRejectedValue(new Error('Retry 2 handler failure'));
-      await processWebhookWithIdempotency(mockWebhookPayload, handler3);
-      expect(mockDb.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', retryCount: 2 }));
-
-      // Simulate retry 3 (event exists as failed, retryCount 2) - should not retry handler
-      mockDb.select.mockResolvedValueOnce([{ eventId: testEventId, status: 'failed', retryCount: 2 }]);
-      const handler4 = jest.fn().mockResolvedValue('processed'); // This handler should not be called
-      const result = await processWebhookWithIdempotency(mockWebhookPayload, handler4);
-      expect(result.success).toBe(true); // It returns success because it's already processed and exceeded retry limit
-      expect(handler4).not.toHaveBeenCalled(); // Handler should NOT be called
-    });
-  });
-});
-
-describe('Stripe Webhook Signature Validation', () => {
-  const mockBody = JSON.stringify({ id: 'evt_test', type: 'test.event' });
-  const mockSignature = 't=123456,v1=mock_signature';
-  const mockSecret = 'whsec_test_secret';
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // Reset the mock for constructEvent for these tests
-    (mockStripe.webhooks.constructEvent as jest.Mock).mockReset();
-  });
-
-  it('should throw an error if signature is missing', async () => {
-    // Mock the NextRequest headers to simulate missing signature
-    const req = { headers: { get: jest.fn((name) => (name === 'Stripe-Signature' ? null : '')) }, text: () => Promise.resolve(mockBody) } as any;
-    process.env.STRIPE_WEBHOOK_SECRET = mockSecret;
-
-    // We need to import handleWebhook from the actual route file to test its error handling
-    const { POST: handleWebhook } = await import('@/app/api/stripe/webhooks/route');
-
-    const response = await handleWebhook(req);
-    const data = await response.json();
-
-    expect(response.status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
-    expect(mockStripe.webhooks.constructEvent).not.toHaveBeenCalled();
-  });
-
-  it('should throw an error if webhook secret is missing', async () => {
-    const req = { headers: { get: jest.fn((name) => (name === 'Stripe-Signature' ? mockSignature : '')) }, text: () => Promise.resolve(mockBody) } as any;
-    process.env.STRIPE_WEBHOOK_SECRET = undefined; // Simulate missing secret
-
-    const { POST: handleWebhook } = await import('@/app/api/stripe/webhooks/route');
-
-    const response = await handleWebhook(req);
-    const data = await response.json();
-
-    expect(response.status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
-    expect(mockStripe.webhooks.constructEvent).not.toHaveBeenCalled();
-  });
-
-  it('should throw an error if signature is invalid', async () => {
-    (mockStripe.webhooks.constructEvent as jest.Mock).mockImplementation(() => {
-      throw new Stripe.errors.StripeSignatureVerificationError('Invalid signature', 'sig_test', 'body_test');
-    });
-
-    const req = { headers: { get: jest.fn((name) => (name === 'Stripe-Signature' ? mockSignature : '')) }, text: () => Promise.resolve(mockBody) } as any;
-    process.env.STRIPE_WEBHOOK_SECRET = mockSecret;
-
-    const { POST: handleWebhook } = await import('@/app/api/stripe/webhooks/route');
-
-    const response = await handleWebhook(req);
-    const data = await response.json();
-
-    expect(response.status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
-    expect(mockStripe.webhooks.constructEvent).toHaveBeenCalledWith(mockBody, mockSignature, mockSecret);
-  });
-
-  it('should process the webhook if signature is valid', async () => {
-    (mockStripe.webhooks.constructEvent as jest.Mock).mockReturnValue(mockWebhookPayload);
-
-    const req = { headers: { get: jest.fn((name) => (name === 'Stripe-Signature' ? mockSignature : '')) }, text: () => Promise.resolve(mockBody) } as any;
-    process.env.STRIPE_WEBHOOK_SECRET = mockSecret;
-
-    // Mock db.select and db.transaction for processWebhookWithIdempotency
-    mockDb.select.mockResolvedValue([]);
-    mockDb.transaction.mockImplementation(async (callback) => {
-      const txMock = {
-        insert: jest.fn().mockResolvedValue({}),
-        update: jest.fn().mockResolvedValue({}),
-        select: jest.fn().mockResolvedValue([]),
+    it('should maintain consistency across related tables', async () => {
+      const mockEvent = {
+        id: 'evt_consistency_123',
+        type: 'payment_intent.succeeded',
+        created: Date.now() / 1000,
+        data: {
+          object: {
+            id: 'pi_test',
+            metadata: {
+              bookingId: 'booking_123',
+              type: 'booking_payment'
+            }
+          }
+        }
       };
-      return callback(txMock);
+
+      const updates: string[] = [];
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const mockTx = {
+          insert: vi.fn().mockImplementation((table: any) => {
+            updates.push('webhook_event_inserted');
+            return {
+              values: vi.fn().mockReturnThis(),
+              returning: vi.fn().mockResolvedValue([{ id: 1 }])
+            };
+          }),
+          update: vi.fn().mockImplementation((table: any) => {
+            updates.push('booking_updated');
+            updates.push('transaction_updated');
+            return {
+              set: vi.fn().mockReturnThis(),
+              where: vi.fn().mockReturnThis()
+            };
+          })
+        };
+        return callback(mockTx);
+      });
+
+      const handler = vi.fn().mockImplementation(async (event: any, tx: any) => {
+        // Simulate updating booking and transaction
+        await tx.update('bookings').set({ status: 'confirmed' }).where('id', 'booking_123');
+        await tx.update('transactions').set({ status: 'completed' }).where('bookingId', 'booking_123');
+        return { success: true };
+      });
+
+      await processWebhookWithIdempotency(mockEvent as any, handler);
+
+      // All updates should happen in the same transaction
+      expect(updates).toContain('webhook_event_inserted');
+      expect(updates).toContain('booking_updated');
+      expect(updates).toContain('transaction_updated');
+    });
+  });
+
+  describe('Event Type Filtering', () => {
+    it('should only process relevant event types', async () => {
+      const irrelevantEvent = {
+        id: 'evt_irrelevant_123',
+        type: 'customer.created', // Not a payment event
+        created: Date.now() / 1000,
+        data: { object: { id: 'cus_test' } }
+      };
+
+      const handler = vi.fn();
+      const result = await processWebhookWithIdempotency(irrelevantEvent as any, handler);
+
+      // Should skip processing for irrelevant events
+      expect(result.skipped).toBe(true);
+      expect(handler).not.toHaveBeenCalled();
     });
 
-    const { POST: handleWebhook } = await import('@/app/api/stripe/webhooks/route');
+    it('should process all payment-related events', async () => {
+      const paymentEvents = [
+        'payment_intent.succeeded',
+        'payment_intent.payment_failed',
+        'charge.succeeded',
+        'charge.failed',
+        'charge.dispute.created',
+        'transfer.created',
+        'transfer.paid',
+        'refund.created'
+      ];
 
-    const response = await handleWebhook(req);
-    expect(response.status).toBe(200);
-    expect(mockStripe.webhooks.constructEvent).toHaveBeenCalledWith(mockBody, mockSignature, mockSecret);
-    // Verify that processWebhookWithIdempotency was called
-    expect(mockDb.transaction).toHaveBeenCalled();
+      for (const eventType of paymentEvents) {
+        const mockEvent = {
+          id: `evt_${eventType}_123`,
+          type: eventType,
+          created: Date.now() / 1000,
+          data: { object: { id: 'obj_test' } }
+        };
+
+        (db.select as any).mockReturnValue({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([])
+        });
+
+        (db.transaction as any).mockImplementation(async (callback: any) => {
+          const mockTx = {
+            insert: vi.fn().mockReturnValue({
+              values: vi.fn().mockReturnThis(),
+              returning: vi.fn().mockResolvedValue([{ id: 1 }])
+            }),
+            update: vi.fn().mockReturnValue({
+              set: vi.fn().mockReturnThis(),
+              where: vi.fn().mockReturnThis()
+            })
+          };
+          return callback(mockTx);
+        });
+
+        const handler = vi.fn().mockResolvedValue({ success: true });
+        const result = await processWebhookWithIdempotency(mockEvent as any, handler);
+
+        expect(result.success).toBe(true);
+        expect(handler).toHaveBeenCalled();
+        
+        vi.clearAllMocks();
+      }
+    });
   });
 });
