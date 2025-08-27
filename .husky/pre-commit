@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Pre-commit hook for TypeScript safety
+echo "🔍 Running pre-commit checks..."
+
+# 1. Type checking
+echo "📝 Checking TypeScript types..."
+npm run type-check || {
+  echo "❌ TypeScript errors found. Please fix before committing."
+  exit 1
+}
+
+# 2. Lint staged files
+echo "🧹 Linting staged files..."
+npx lint-staged || {
+  echo "❌ Linting errors found. Please fix before committing."
+  exit 1
+}
+
+# 3. Validate schemas if db files changed
+if git diff --cached --name-only | grep -q "db/schema/"; then
+  echo "🗄️ Database schemas changed, validating types..."
+  npm run types:validate || {
+    echo "❌ Schema validation failed. Run 'npm run types:generate' to fix."
+    exit 1
+  }
+fi
+
+echo "✅ All pre-commit checks passed!"

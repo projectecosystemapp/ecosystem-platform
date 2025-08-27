@@ -48,8 +48,12 @@ export function initializeApp() {
   }
   
   // Log Redis status
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    console.log("✅ Redis configured for rate limiting");
+  const hasUpstash = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
+  const hasRedisCloud = process.env.REDIS_HOST && process.env.REDIS_PORT && process.env.REDIS_PASSWORD;
+  
+  if (hasUpstash || hasRedisCloud) {
+    const redisType = hasRedisCloud ? "Redis Cloud" : "Upstash";
+    console.log(`✅ ${redisType} configured for rate limiting`);
   } else {
     console.log("⚠️  Redis not configured - using in-memory rate limiting");
     if (process.env.NODE_ENV === "production") {

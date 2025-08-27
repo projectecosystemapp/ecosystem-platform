@@ -25,7 +25,7 @@ import {
   shouldSkipCSRF, 
   csrfCookieOptions 
 } from "@/lib/security/csrf";
-import { rateLimit, getRateLimitConfig } from "@/lib/security/rate-limit";
+import { rateLimit, getRateLimitConfig } from "@/lib/security/rate-limit-edge";
 import { generateNonce, generateCSPHeader } from "@/lib/security/csp-nonce";
 
 // Route matchers for different protection levels

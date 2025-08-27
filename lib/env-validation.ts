@@ -41,9 +41,17 @@ const envSchema = z.object({
   // Email Service (Optional)
   RESEND_API_KEY: z.string().optional(),
   
-  // Rate Limiting (Optional but recommended)
+  // Rate Limiting (Optional - can use Upstash or Redis Cloud)
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  
+  // Redis Cloud Configuration (Alternative to Upstash)
+  REDIS_HOST: z.string().optional(),
+  REDIS_PORT: z.coerce.number().optional(),
+  REDIS_PASSWORD: z.string().optional(),
+  REDIS_USERNAME: z.string().optional(),
+  REDIS_URL: z.string().optional(),
+  REDIS_TLS: z.coerce.boolean().optional(),
   
   // Monitoring (Optional but recommended)
   NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
@@ -55,6 +63,15 @@ const envSchema = z.object({
   // Mapbox (Optional)
   NEXT_PUBLIC_MAPBOX_TOKEN: z.string().optional(),
   MAPBOX_SECRET_TOKEN: z.string().optional(),
+  
+  // Google OAuth (Optional)
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().optional(),
+  
+  // Google Maps (Optional)
+  GOOGLE_MAPS_API_KEY: z.string().optional(),
+  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().optional(),
   
   // Node Environment
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -208,7 +225,7 @@ export function logEnvStatus() {
     }
   } else {
     console.error('❌ Environment validation failed:');
-    validation.errors?.errors.forEach(err => {
+    validation.errors?.issues?.forEach(err => {
       console.error(`  - ${err.path.join('.')}: ${err.message}`);
     });
   }
@@ -218,7 +235,8 @@ export function logEnvStatus() {
   console.log(`  - Database: ${process.env.DATABASE_URL ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  - Authentication: ${process.env.CLERK_SECRET_KEY ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  - Payments: ${process.env.STRIPE_SECRET_KEY ? '✅ Configured' : '❌ Not configured'}`);
-  console.log(`  - Redis/Caching: ${process.env.UPSTASH_REDIS_REST_URL ? '✅ Configured' : '⚠️  Using in-memory fallback'}`);
+  const hasRedis = process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_HOST;
+  console.log(`  - Redis/Caching: ${hasRedis ? '✅ Configured' : '⚠️  Using in-memory fallback'}`);
   console.log(`  - Error Monitoring: ${process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN ? '✅ Configured' : '⚠️  Disabled'}`);
   console.log(`  - Email Service: ${process.env.RESEND_API_KEY ? '✅ Configured' : '⚠️  Disabled'}`);
   

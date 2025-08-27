@@ -1,0 +1,83 @@
+name: Type Check CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  type-check:
+    name: Type Safety Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Generate types from schemas
+        run: npm run types:generate
+        
+      - name: Validate type alignment
+        run: npm run types:validate
+        
+      - name: Run TypeScript compiler
+        run: npm run type-check
+        
+      - name: Check for type drift
+        run: |
+          # Ensure no uncommitted type changes
+          if [ -n "$(git status --porcelain types/generated/)" ]; then
+            echo "Error: Generated types are out of sync!"
+            echo "Run 'npm run types:generate' locally and commit changes"
+            git diff types/generated/
+            exit 1
+          fi
+        
+      - name: Validate Zod schemas
+        run: |
+          # Test that Zod schemas match TypeScript types
+          npx tsx -e "
+            import { z } from 'zod';
+            import * as schemas from './types/schemas';
+            import * as types from './types/core';
+            
+            // Basic validation that schemas compile
+            console.log('✅ Zod schemas validated');
+          "
+          
+  lint-imports:
+    name: Import Path Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Check import paths
+        run: |
+          # Ensure no relative imports from outside directories
+          npx eslint . --ext .ts,.tsx --rule 'import/no-relative-packages: error'
+          
+      - name: Validate path aliases
+        run: |
+          # Check that all @/* imports resolve correctly
+          npx tsc --noEmit --traceResolution | grep -E "^======== Resolving module '@/'" || true

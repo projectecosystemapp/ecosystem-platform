@@ -39,7 +39,12 @@
     "security:audit": "npx tsx scripts/security-audit.ts",
     "security:check": "npm audit --audit-level=moderate && npm run security:audit",
     "redis:check": "npx tsx scripts/check-redis.ts",
-    "redis:health": "curl -s http://localhost:3000/api/health/redis | jq"
+    "redis:health": "curl -s http://localhost:3000/api/health/redis | jq",
+    "types:generate": "npx tsx scripts/generate-types.ts",
+    "types:validate": "npx tsx scripts/generate-types.ts --validate-only",
+    "check:schema": "npm run types:generate && npm run type-check",
+    "check:all": "npm run check:schema && npm run lint && npm run test",
+    "prepare": "husky"
   },
   "dependencies": {
     "@clerk/backend": "^1.9.0",
@@ -78,6 +83,8 @@
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.2",
     "@sentry/nextjs": "^10.5.0",
+    "@stripe/connect-js": "^3.3.10",
+    "@stripe/react-connect-js": "^3.3.10",
     "@stripe/react-stripe-js": "^3.9.1",
     "@stripe/stripe-js": "^7.8.0",
     "@supabase/ssr": "^0.6.1",
@@ -88,6 +95,7 @@
     "@types/he": "^1.2.3",
     "@upstash/ratelimit": "^2.0.6",
     "@upstash/redis": "^1.35.3",
+    "ioredis": "^5.4.1",
     "bcrypt": "^6.0.0",
     "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.0",
@@ -134,7 +142,6 @@
     "uuid": "^11.1.0",
     "vaul": "^0.9.1",
     "xss": "^1.0.15",
-    "zod": "^3.23.8",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -157,11 +164,15 @@
     "drizzle-kit": "^0.24.2",
     "eslint": "^8",
     "eslint-config-next": "14.2.7",
+    "eslint-plugin-import": "^2.32.0",
+    "husky": "^9.1.7",
     "jest": "^30.0.5",
     "jest-environment-jsdom": "^30.0.5",
+    "lint-staged": "^16.1.5",
     "postcss": "^8",
     "remotion": "^4.0.327",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "zod": "^4.1.3"
   }
 }

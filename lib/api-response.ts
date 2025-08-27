@@ -1,180 +1,267 @@
-import { NextResponse } from "next/server";
+/**
+ * API Response Utilities
+ * 
+ * Standardized response helpers that enforce the ApiResponse<T> pattern
+ * across all API endpoints for consistent error handling and type safety.
+ */
 
-export interface ApiSuccessResponse<T = any> {
-  success: true;
-  data: T;
-  message?: string;
+import { NextResponse } from 'next/server';
+import { ZodError, ZodSchema } from 'zod';
+import type { ApiResponse, ApiError, ErrorCode } from '@/types/core';
+
+/**
+ * Create a successful API response
+ */
+export function successResponse<T>(
+  data: T,
+  status: number = 200
+): NextResponse<ApiResponse<T>> {
+  return NextResponse.json(
+    {
+      success: true,
+      data,
+    } satisfies ApiResponse<T>,
+    { status }
+  );
 }
 
-export interface ApiErrorResponse {
-  success: false;
-  error: {
-    message: string;
-    code?: string;
-    details?: any;
+/**
+ * Create an error API response
+ */
+export function errorResponse(
+  code: ErrorCode,
+  message: string,
+  status: number = 400,
+  details?: Record<string, any>
+): NextResponse<ApiResponse<never>> {
+  const error: ApiError = {
+    code,
+    message,
+    details,
+    timestamp: new Date(),
   };
+
+  return NextResponse.json(
+    {
+      success: false,
+      error,
+    } satisfies ApiResponse<never>,
+    { status }
+  );
 }
 
-export interface PaginatedResponse<T> {
-  items: T[];
-  pagination: {
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrevious: boolean;
-  };
+/**
+ * Handle Zod validation errors
+ */
+export function validationErrorResponse(
+  error: ZodError
+): NextResponse<ApiResponse<never>> {
+  const details = error.errors.reduce((acc, err) => {
+    const path = err.path.join('.');
+    acc[path] = err.message;
+    return acc;
+  }, {} as Record<string, string>);
+
+  return errorResponse(
+    'VALIDATION_ERROR',
+    'Invalid request data',
+    400,
+    details
+  );
 }
 
-export class ApiResponse {
-  static success<T>(
-    data: T,
-    message?: string,
-    statusCode: number = 200
-  ): NextResponse<ApiSuccessResponse<T>> {
-    return NextResponse.json(
-      {
-        success: true,
-        data,
-        message,
-      },
-      { status: statusCode }
-    );
-  }
-
-  static paginated<T>(
-    items: T[],
-    total: number,
-    page: number,
-    pageSize: number,
-    statusCode: number = 200
-  ): NextResponse<ApiSuccessResponse<PaginatedResponse<T>>> {
-    const totalPages = Math.ceil(total / pageSize);
-    const hasNext = page < totalPages;
-    const hasPrevious = page > 1;
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: {
-          items,
-          pagination: {
-            total,
-            page,
-            pageSize,
-            totalPages,
-            hasNext,
-            hasPrevious,
-          },
-        },
-      },
-      { status: statusCode }
-    );
-  }
-
-  static error(
-    message: string,
-    code?: string,
-    details?: any,
-    statusCode: number = 400
-  ): NextResponse<ApiErrorResponse> {
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          message,
-          code,
-          details,
-        },
-      },
-      { status: statusCode }
-    );
-  }
-
-  static unauthorized(message: string = "Unauthorized"): NextResponse<ApiErrorResponse> {
-    return this.error(message, "UNAUTHORIZED", null, 401);
-  }
-
-  static forbidden(message: string = "Forbidden"): NextResponse<ApiErrorResponse> {
-    return this.error(message, "FORBIDDEN", null, 403);
-  }
-
-  static notFound(resource: string): NextResponse<ApiErrorResponse> {
-    return this.error(`${resource} not found`, "NOT_FOUND", null, 404);
-  }
-
-  static conflict(message: string, details?: any): NextResponse<ApiErrorResponse> {
-    return this.error(message, "CONFLICT", details, 409);
-  }
-
-  static validationError(errors: any): NextResponse<ApiErrorResponse> {
-    return this.error("Validation error", "VALIDATION_ERROR", errors, 422);
-  }
-
-  static serverError(
-    message: string = "Internal server error",
-    details?: any
-  ): NextResponse<ApiErrorResponse> {
-    return this.error(message, "SERVER_ERROR", details, 500);
-  }
-
-  static rateLimitExceeded(
-    resetTime?: Date
-  ): NextResponse<ApiErrorResponse> {
-    return this.error(
-      "Rate limit exceeded",
-      "RATE_LIMIT_EXCEEDED",
-      { resetTime },
-      429
-    );
-  }
-
-  static created<T>(
-    data: T,
-    message?: string
-  ): NextResponse<ApiSuccessResponse<T>> {
-    return this.success(data, message, 201);
-  }
-
-  static noContent(): NextResponse {
-    return new NextResponse(null, { status: 204 });
-  }
-}
-
-// Pagination helper
-export function getPaginationParams(searchParams: URLSearchParams) {
-  const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "20")));
-  const offset = (page - 1) * pageSize;
+/**
+ * Handle database errors
+ */
+export function databaseErrorResponse(
+  error: unknown
+): NextResponse<ApiResponse<never>> {
+  console.error('Database error:', error);
   
-  return { page, pageSize, offset, limit: pageSize };
+  if (error instanceof Error && error.message.includes('unique constraint')) {
+    return errorResponse(
+      'CONFLICT',
+      'Resource already exists',
+      409
+    );
+  }
+
+  return errorResponse(
+    'DATABASE_ERROR',
+    'A database error occurred',
+    500
+  );
 }
 
-// Error handling wrapper
-export async function withErrorHandler<T>(
-  handler: () => Promise<T>
-): Promise<NextResponse> {
-  try {
-    return await handler();
-  } catch (error) {
-    console.error("API Error:", error);
+/**
+ * Handle Stripe errors
+ */
+export function stripeErrorResponse(
+  error: unknown
+): NextResponse<ApiResponse<never>> {
+  console.error('Stripe error:', error);
+  
+  if (error && typeof error === 'object' && 'type' in error) {
+    const stripeError = error as any;
     
-    if (error instanceof Error) {
-      // Check for specific error types
-      if (error.message.includes("duplicate key")) {
-        return ApiResponse.conflict("Resource already exists");
-      }
-      if (error.message.includes("foreign key")) {
-        return ApiResponse.validationError({ 
-          message: "Invalid reference to related resource" 
-        });
-      }
-      if (error.message.includes("not found")) {
-        return ApiResponse.notFound("Resource");
-      }
+    if (stripeError.type === 'StripeCardError') {
+      return errorResponse(
+        'PAYMENT_FAILED',
+        stripeError.message || 'Payment failed',
+        402,
+        { decline_code: stripeError.decline_code }
+      );
     }
     
-    return ApiResponse.serverError();
+    if (stripeError.type === 'StripeInvalidRequestError') {
+      return errorResponse(
+        'BAD_REQUEST',
+        stripeError.message || 'Invalid payment request',
+        400
+      );
+    }
   }
+
+  return errorResponse(
+    'EXTERNAL_SERVICE_ERROR',
+    'Payment processing error',
+    500
+  );
+}
+
+/**
+ * Handle authentication errors
+ */
+export function unauthorizedResponse(
+  message: string = 'Authentication required'
+): NextResponse<ApiResponse<never>> {
+  return errorResponse('UNAUTHORIZED', message, 401);
+}
+
+/**
+ * Handle authorization errors
+ */
+export function forbiddenResponse(
+  message: string = 'Insufficient permissions'
+): NextResponse<ApiResponse<never>> {
+  return errorResponse('FORBIDDEN', message, 403);
+}
+
+/**
+ * Handle not found errors
+ */
+export function notFoundResponse(
+  resource: string = 'Resource'
+): NextResponse<ApiResponse<never>> {
+  return errorResponse('NOT_FOUND', `${resource} not found`, 404);
+}
+
+/**
+ * Handle rate limit errors
+ */
+export function rateLimitResponse(): NextResponse<ApiResponse<never>> {
+  return errorResponse(
+    'RATE_LIMITED',
+    'Too many requests. Please try again later.',
+    429
+  );
+}
+
+/**
+ * Validate request body with Zod schema
+ */
+export async function validateRequestBody<T>(
+  request: Request,
+  schema: ZodSchema<T>
+): Promise<T | NextResponse<ApiResponse<never>>> {
+  try {
+    const body = await request.json();
+    const result = schema.safeParse(body);
+    
+    if (!result.success) {
+      return validationErrorResponse(result.error);
+    }
+    
+    return result.data;
+  } catch (error) {
+    return errorResponse(
+      'BAD_REQUEST',
+      'Invalid JSON in request body',
+      400
+    );
+  }
+}
+
+/**
+ * Validate query parameters with Zod schema
+ */
+export function validateQueryParams<T>(
+  searchParams: URLSearchParams,
+  schema: ZodSchema<T>
+): T | NextResponse<ApiResponse<never>> {
+  const params = Object.fromEntries(searchParams.entries());
+  const result = schema.safeParse(params);
+  
+  if (!result.success) {
+    return validationErrorResponse(result.error);
+  }
+  
+  return result.data;
+}
+
+/**
+ * Wrap async route handlers with error handling
+ */
+export function withErrorHandling<T>(
+  handler: (request: Request) => Promise<NextResponse<ApiResponse<T>>>
+) {
+  return async (request: Request): Promise<NextResponse<ApiResponse<T | never>>> => {
+    try {
+      return await handler(request);
+    } catch (error) {
+      console.error('Unhandled API error:', error);
+      
+      if (error instanceof Error) {
+        // Check for known error types
+        if (error.message.includes('Unauthorized')) {
+          return unauthorizedResponse();
+        }
+        
+        if (error.message.includes('Not found')) {
+          return notFoundResponse();
+        }
+      }
+      
+      // Generic internal error
+      return errorResponse(
+        'INTERNAL_ERROR',
+        'An internal server error occurred',
+        500
+      );
+    }
+  };
+}
+
+/**
+ * Type guard to check if response is an error
+ */
+export function isErrorResponse<T>(
+  response: T | NextResponse<ApiResponse<never>>
+): response is NextResponse<ApiResponse<never>> {
+  return response instanceof NextResponse;
+}
+
+/**
+ * Extract data from API response or throw
+ */
+export async function extractResponseData<T>(
+  response: Response
+): Promise<T> {
+  const json = await response.json() as ApiResponse<T>;
+  
+  if (!json.success) {
+    throw new Error(json.error.message);
+  }
+  
+  return json.data;
 }

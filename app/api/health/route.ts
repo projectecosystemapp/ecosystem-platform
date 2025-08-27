@@ -7,7 +7,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db/db";
 import { sql } from "drizzle-orm";
-import { checkRedisHealth } from "@/lib/redis-config";
+import { checkRedisHealth } from "@/lib/redis-cloud";
 import { isSentryConfigured } from "@/lib/sentry";
 import { checkRequiredEnvVars } from "@/lib/env-validation";
 import Stripe from "stripe";
@@ -185,11 +185,17 @@ async function checkRedis(): Promise<ComponentHealth> {
   const redisHealth = await checkRedisHealth();
   
   if (!redisHealth.connected) {
-    // Check if Redis is configured
-    const isConfigured = !!(
+    // Check if Redis is configured (either Upstash or Redis Cloud)
+    const hasUpstash = !!(
       process.env.UPSTASH_REDIS_REST_URL && 
       process.env.UPSTASH_REDIS_REST_TOKEN
     );
+    const hasRedisCloud = !!(
+      process.env.REDIS_HOST && 
+      process.env.REDIS_PORT && 
+      process.env.REDIS_PASSWORD
+    );
+    const isConfigured = hasUpstash || hasRedisCloud;
     
     if (!isConfigured) {
       return {
@@ -217,13 +223,19 @@ async function checkRedis(): Promise<ComponentHealth> {
     };
   }
   
+  const hasRedisCloud = !!(
+    process.env.REDIS_HOST && 
+    process.env.REDIS_PORT && 
+    process.env.REDIS_PASSWORD
+  );
+  
   return {
     status: "healthy",
     latency: redisHealth.latency,
     message: "Redis connection successful",
     details: {
-      provider: "Upstash",
-      type: "REST API",
+      provider: hasRedisCloud ? "Redis Cloud" : "Upstash",
+      type: hasRedisCloud ? "Native Protocol" : "REST API",
     },
   };
 }
@@ -402,7 +414,8 @@ function checkEnvironment(): ComponentHealth {
   if (process.env.NODE_ENV === "production") {
     const productionIssues = [];
     
-    if (!process.env.UPSTASH_REDIS_REST_URL) {
+    const hasRedis = process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_HOST;
+    if (!hasRedis) {
       productionIssues.push("Redis not configured");
     }
     if (!process.env.NEXT_PUBLIC_SENTRY_DSN) {

@@ -1,12 +1,13 @@
 /**
- * Enhanced Rate Limiting Configuration
+ * Edge Runtime Compatible Rate Limiting
  * 
- * Provides advanced rate limiting with Redis/Upstash
- * Falls back to in-memory rate limiting if Redis is unavailable
+ * This file is specifically for Next.js middleware which runs in Edge Runtime.
+ * Uses Upstash REST API which is Edge-compatible, unlike ioredis.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { rateLimiters, withRateLimit as withRedisRateLimit, getClientIp } from '../rate-limiter-redis-cloud';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+import { NextRequest } from 'next/server';
 
 // In-memory rate limit store for fallback
 const inMemoryStore = new Map<string, { count: number; resetTime: number }>();
@@ -31,18 +32,36 @@ export const rateLimitConfigs = {
 } as const;
 
 /**
- * Check if Redis Cloud is configured
+ * Create rate limiter instance
  */
-function isRedisConfigured(): boolean {
-  return !!(process.env.REDIS_HOST && process.env.REDIS_PORT && process.env.REDIS_PASSWORD);
+function createRateLimiter() {
+  // Check if Upstash credentials are available (for Edge Runtime)
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    // In middleware, we can't use Redis Cloud (ioredis) as it's not Edge-compatible
+    console.warn('Upstash Redis not configured for Edge Runtime rate limiting');
+    return null;
+  }
+
+  try {
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+
+    return new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, '10 s'),
+      analytics: true,
+      prefix: 'ecosystem-ratelimit',
+    });
+  } catch (error) {
+    console.error('Failed to initialize Upstash rate limiter:', error);
+    return null;
+  }
 }
 
-// Log Redis configuration status
-if (isRedisConfigured()) {
-  console.log('✅ Redis Cloud rate limiting configured');
-} else {
-  console.warn('⚠️ Redis Cloud not configured, using in-memory rate limiting fallback');
-}
+// Initialize rate limiter
+const rateLimiter = createRateLimiter();
 
 /**
  * In-memory rate limit fallback
@@ -132,25 +151,11 @@ export async function rateLimit(
   const headers = new Headers();
 
   try {
-    if (isRedisConfigured()) {
-      // Use Redis Cloud rate limiting
-      // Select appropriate rate limiter based on endpoint
-      let limiter = rateLimiters.api; // Default
-      const pathname = request.nextUrl.pathname;
+    if (rateLimiter) {
+      // Use Upstash-based rate limiting (Edge-compatible)
+      const result = await rateLimiter.limit(identifier);
       
-      if (pathname.includes('/search')) {
-        limiter = rateLimiters.search;
-      } else if (pathname.includes('/payment') || pathname.includes('/stripe')) {
-        limiter = rateLimiters.payment;
-      } else if (pathname.includes('/auth') || pathname.includes('/login')) {
-        limiter = rateLimiters.auth;
-      } else if (pathname.includes('/webhook')) {
-        limiter = rateLimiters.webhook;
-      }
-      
-      const result = await limiter.limit(identifier);
-      
-      headers.set('X-RateLimit-Limit', result.limit.toString());
+      headers.set('X-RateLimit-Limit', config.requests.toString());
       headers.set('X-RateLimit-Remaining', result.remaining.toString());
       headers.set('X-RateLimit-Reset', new Date(result.reset).toISOString());
       
@@ -212,31 +217,4 @@ export function getRateLimitConfig(pathname: string): { requests: number; window
   // Page routes
   if (pathname.startsWith('/dashboard')) return rateLimitConfigs.pages.dashboard;
   return rateLimitConfigs.pages.default;
-}
-
-/**
- * Rate limit middleware for API routes
- */
-export async function withRateLimit(
-  request: NextRequest,
-  handler: () => Promise<NextResponse>
-): Promise<NextResponse> {
-  const config = getRateLimitConfig(request.nextUrl.pathname);
-  const { success, headers } = await rateLimit(request, config);
-
-  if (!success) {
-    return NextResponse.json(
-      { error: 'Too Many Requests' },
-      { status: 429, headers }
-    );
-  }
-
-  const response = await handler();
-  
-  // Add rate limit headers to response
-  headers.forEach((value, key) => {
-    response.headers.set(key, value);
-  });
-
-  return response;
 }
