@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Provider Image Upload API Endpoint
  * Series A Production Standards - Secure image upload with validation

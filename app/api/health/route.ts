@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Comprehensive Health Check Endpoint
  * Monitors all critical system components

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Check, Clock, Users, Calendar, Star } from 'lucide-react';
 import { useAuth } from '@clerk/nextjs';
-import { toast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
 
 interface SubscriptionPlan {

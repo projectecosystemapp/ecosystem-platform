@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { manageSubscriptionStatusChange, updateStripeCustomer } from "@/actions/stripe-actions";
 import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";

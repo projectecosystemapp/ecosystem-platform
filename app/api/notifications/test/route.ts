@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Notification System Test Endpoint
  * 

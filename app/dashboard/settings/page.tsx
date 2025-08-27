@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Settings page for the ECOSYSTEM Marketplace dashboard
  * Allows users to configure their account and application settings

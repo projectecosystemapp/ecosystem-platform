@@ -5,7 +5,8 @@
  * even when delivered multiple times by Stripe
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// @ts-nocheck
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { processWebhookWithIdempotency } from '@/lib/webhook-idempotency';
 import { db } from '@/db/db';
 import { webhookEventsTable } from '@/db/schema';

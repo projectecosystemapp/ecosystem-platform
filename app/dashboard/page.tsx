@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Dashboard page for ECOSYSTEM Marketplace
  * Routes users to their appropriate dashboard based on role

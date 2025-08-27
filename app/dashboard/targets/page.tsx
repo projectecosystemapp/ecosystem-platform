@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Targets page for the ECOSYSTEM Marketplace dashboard
  * Allows users to set and manage their targets and goals

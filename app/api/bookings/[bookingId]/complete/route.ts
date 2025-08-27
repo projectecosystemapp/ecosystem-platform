@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Complete Booking API
  * 

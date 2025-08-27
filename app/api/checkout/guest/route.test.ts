@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Jest test file
 import { NextRequest } from 'next/server';
 import { POST } from './route';

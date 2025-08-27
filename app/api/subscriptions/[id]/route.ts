@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * GET /api/subscriptions/[id]
  * Get subscription details

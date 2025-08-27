@@ -15,7 +15,7 @@ import {
   Pause,
   Play
 } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
 import {
   AlertDialog,

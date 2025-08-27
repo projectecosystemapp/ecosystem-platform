@@ -526,7 +526,7 @@ export default function AgentsDashboard() {
                         <div key={agentId}>
                           <div className="flex justify-between text-sm mb-1">
                             <span>{agentId}</span>
-                            <span>{utilization}%</span>
+                            <span>{String(utilization)}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div 

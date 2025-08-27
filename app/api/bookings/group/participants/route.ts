@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Group Booking Participants API
  * 

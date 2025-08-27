@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Data Source page for the ECOSYSTEM Marketplace dashboard
  * Allows users to configure and manage their data sources

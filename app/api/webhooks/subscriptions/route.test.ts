@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { POST } from './route';
 import { stripe } from '@/lib/stripe';

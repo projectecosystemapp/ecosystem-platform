@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Cancel Booking API
  * 

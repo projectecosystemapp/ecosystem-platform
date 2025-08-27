@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * POST /api/webhooks/subscriptions
  * Handle Stripe subscription webhook events

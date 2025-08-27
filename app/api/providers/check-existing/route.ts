@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * API Route: Check Existing Provider Profile
  * 

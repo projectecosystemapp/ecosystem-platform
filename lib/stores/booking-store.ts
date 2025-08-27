@@ -19,6 +19,12 @@ export interface BookingFormData {
   providerName: string;
   providerBusinessName?: string;
   
+  // Guest info (for guest checkout)
+  guestEmail?: string;
+  guestFirstName?: string;
+  guestLastName?: string;
+  guestPhone?: string;
+  
   // Metadata
   referrer?: string;
   utmSource?: string;
@@ -325,7 +331,7 @@ export const useBookingStore = create<BookingState>()(
         
         return {
           serviceName: bookingData.serviceName,
-          providerName: bookingData.providerBusinessName || bookingData.providerName,
+          providerName: bookingData.providerBusinessName || bookingData.providerName || '',
           date: bookingData.bookingDate.toLocaleDateString(),
           time: `${bookingData.startTime} - ${bookingData.endTime}`,
           duration: bookingData.serviceDuration || 0,

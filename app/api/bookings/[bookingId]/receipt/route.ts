@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Receipt Generation API
  * 

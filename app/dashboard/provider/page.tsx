@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";

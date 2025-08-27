@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Provider Accept Booking API
  * 

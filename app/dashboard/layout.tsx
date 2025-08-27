@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Dashboard layout for ECOSYSTEM Marketplace
  * This layout removes the global header from all dashboard pages

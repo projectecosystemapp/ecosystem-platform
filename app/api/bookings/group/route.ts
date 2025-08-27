@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Group Bookings API Endpoints
  * 

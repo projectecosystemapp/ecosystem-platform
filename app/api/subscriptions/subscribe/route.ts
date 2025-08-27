@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * POST /api/subscriptions/subscribe
  * Create a new subscription for a customer

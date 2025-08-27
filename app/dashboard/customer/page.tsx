@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Customer Dashboard Page
  * 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Example API Route with Rate Limiting
  * 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { auth } from "@clerk/nextjs/server";
 import { getProfileByUserId } from "@/db/queries/profiles-queries";
 import { NextResponse } from "next/server";

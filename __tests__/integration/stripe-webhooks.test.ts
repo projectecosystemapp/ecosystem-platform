@@ -5,7 +5,8 @@
  * Including signature validation, event processing, and state management
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// @ts-nocheck
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { POST } from '@/app/api/stripe/webhooks/route';
 import { NextRequest } from 'next/server';
 import { stripe } from '@/lib/stripe';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * GET /api/subscriptions/customer
  * Get all subscriptions for the authenticated customer

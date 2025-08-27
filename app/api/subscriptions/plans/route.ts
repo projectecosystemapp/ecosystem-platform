@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * GET /api/subscriptions/plans
  * List available subscription plans

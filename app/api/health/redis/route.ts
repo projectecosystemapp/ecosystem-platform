@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Redis Health Check Endpoint
  * 

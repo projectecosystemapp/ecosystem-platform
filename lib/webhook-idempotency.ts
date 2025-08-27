@@ -10,10 +10,12 @@ import Stripe from "stripe";
 
 export type WebhookStatus = "received" | "processing" | "completed" | "failed";
 
-export interface WebhookProcessingResult {
-  alreadyProcessed: boolean;
-  status?: WebhookStatus;
+export interface WebhookProcessingResult<T = any> {
+  success: boolean;
+  result?: T;
   error?: string;
+  alreadyProcessed?: boolean;
+  status?: WebhookStatus;
 }
 
 /**
@@ -83,7 +85,11 @@ export async function processWebhookWithIdempotency<T = any>(
             .where(eq(webhookEventsTable.id, existingEvent.id));
         } else {
           // Event already successfully processed or exceeded retry limit
-          return { alreadyProcessed: true, status: existingEvent.status };
+          return { 
+            success: false, 
+            alreadyProcessed: true, 
+            status: existingEvent.status 
+          };
         }
       } else {
         // Insert new event record with processing status
@@ -111,7 +117,11 @@ export async function processWebhookWithIdempotency<T = any>(
       const processingTime = Date.now() - startTime;
       console.log(`Webhook ${event.id} processed successfully in ${processingTime}ms`);
 
-      return { success: true, result: handlerResult };
+      return { 
+        success: true, 
+        result: handlerResult,
+        alreadyProcessed: false 
+      };
     }, {
       isolationLevel: "read committed", // Prevent dirty reads
       accessMode: "read write",

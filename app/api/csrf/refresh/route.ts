@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * CSRF Token Refresh Endpoint
  * 

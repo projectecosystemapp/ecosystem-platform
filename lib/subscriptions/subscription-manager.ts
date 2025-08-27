@@ -627,6 +627,3 @@ export class SubscriptionManager {
 
 // Export singleton instance
 export const subscriptionManager = new SubscriptionManager();
-
-// Export types
-export type { SubscriptionManager };
