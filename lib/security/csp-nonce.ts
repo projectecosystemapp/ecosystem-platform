@@ -5,14 +5,26 @@
  * to prevent XSS attacks while allowing necessary inline code
  */
 
-import crypto from 'crypto';
 import { headers } from 'next/headers';
 
 /**
- * Generate a secure CSP nonce
+ * Generate a secure CSP nonce using Web Crypto API (Edge runtime compatible)
  */
 export function generateNonce(): string {
-  return crypto.randomBytes(16).toString('base64');
+  // Use Web Crypto API for Edge runtime compatibility
+  const array = new Uint8Array(16);
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+    globalThis.crypto.getRandomValues(array);
+  } else {
+    // Fallback for environments without crypto
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  
+  // Convert to base64
+  const binaryString = String.fromCharCode(...array);
+  return btoa(binaryString);
 }
 
 /**

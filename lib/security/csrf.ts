@@ -133,6 +133,7 @@ export function shouldSkipCSRF(pathname: string): boolean {
   const skipPaths = [
     '/api/stripe/webhooks',
     '/api/stripe/connect/webhooks',
+    '/api/webhooks/subscriptions',
     '/api/health',
     '/api/public',
   ];
