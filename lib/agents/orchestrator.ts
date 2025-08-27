@@ -35,6 +35,7 @@ import {
   TaskResponsePayload
 } from './types';
 import { agentRegistry } from './registry';
+import { agentConfig } from './config';
 
 /**
  * Task assignment strategy

@@ -35,6 +35,19 @@ export enum AgentCapability {
   DATA_ANALYSIS = 'data_analysis',
   USER_INTERACTION = 'user_interaction',
   WORKFLOW_COORDINATION = 'workflow_coordination',
+  PLANNING = 'planning',
+  DECISION_MAKING = 'decision_making',
+  FILE_OPERATIONS = 'file_operations',
+  QUERY_OPTIMIZATION = 'query_optimization',
+  DEBUGGING = 'debugging',
+  TASK_MANAGEMENT = 'task_management',
+  COORDINATION = 'coordination',
+  PROBLEM_SOLVING = 'problem_solving',
+  KNOWLEDGE_MANAGEMENT = 'knowledge_management',
+  CONTEXT_UNDERSTANDING = 'context_understanding',
+  VERSION_CONTROL = 'version_control',
+  COLLABORATION = 'collaboration',
+  QUALITY_ASSURANCE = 'quality_assurance',
 }
 
 /**
