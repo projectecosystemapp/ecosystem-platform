@@ -6,10 +6,12 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
 import { db } from "@/db/db";
-import { bookingsTable, transactionsTable } from "@/db/schema";
+import { bookingsTable, transactionsTable, providersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { processWebhookWithIdempotency } from "@/lib/webhook-idempotency";
 import { logApiStart, logApiSuccess, logApiError, logger } from "@/lib/logger";
+import { sendBookingConfirmation, sendProviderBookingNotification, sendCancellationNotification } from "@/lib/twilio/sms-service";
+import { sendBookingConfirmationEmail, sendProviderBookingNotificationEmail } from "@/lib/sendgrid/email-service";
 
 const relevantEvents = new Set([
   "checkout.session.completed", 
@@ -274,9 +276,90 @@ async function handleBookingPaymentSuccess(event: Stripe.Event, tx?: any) {
 
     console.log(`Booking payment confirmed: ${bookingId}`);
 
-    // TODO: Send confirmation email to customer and provider
+    // Get provider details for notifications
+    const provider = await database
+      .select()
+      .from(providersTable)
+      .where(eq(providersTable.id, updatedBooking.providerId))
+      .limit(1)
+      .then(res => res[0]);
+
+    // Send SMS notifications if phone numbers are available
+    try {
+      // Send customer confirmation SMS
+      if (updatedBooking.customerPhone) {
+        await sendBookingConfirmation({
+          customerPhone: updatedBooking.customerPhone,
+          customerName: updatedBooking.customerName || 'Valued Customer',
+          providerName: provider?.displayName || 'Service Provider',
+          serviceName: updatedBooking.serviceType || 'Service',
+          serviceDate: updatedBooking.serviceDate || new Date(),
+          serviceTime: updatedBooking.serviceTime || 'TBD',
+          totalAmount: updatedBooking.totalAmount || 0,
+          bookingId: updatedBooking.id,
+          location: updatedBooking.serviceLocation || undefined
+        });
+      }
+
+      // Send provider notification SMS
+      if (provider?.phoneNumber) {
+        await sendProviderBookingNotification({
+          providerPhone: provider.phoneNumber,
+          customerName: updatedBooking.customerName || 'Customer',
+          serviceName: updatedBooking.serviceType || 'Service',
+          serviceDate: updatedBooking.serviceDate || new Date(),
+          serviceTime: updatedBooking.serviceTime || 'TBD',
+          bookingId: updatedBooking.id,
+          amount: updatedBooking.providerAmount || updatedBooking.totalAmount || 0
+        });
+      }
+    } catch (smsError) {
+      // Don't fail the webhook if SMS fails
+      console.error('Failed to send SMS notifications:', smsError);
+    }
+
+    // Send email notifications
+    try {
+      // Send customer confirmation email
+      if (updatedBooking.customerEmail) {
+        await sendBookingConfirmationEmail({
+          customerEmail: updatedBooking.customerEmail,
+          customerName: updatedBooking.customerName || 'Valued Customer',
+          providerName: provider?.displayName || 'Service Provider',
+          providerEmail: provider?.email,
+          serviceName: updatedBooking.serviceType || 'Service',
+          serviceDate: updatedBooking.serviceDate || new Date(),
+          serviceTime: updatedBooking.serviceTime || 'TBD',
+          totalAmount: updatedBooking.totalAmount || 0,
+          bookingId: updatedBooking.id,
+          location: updatedBooking.serviceLocation || undefined,
+          notes: updatedBooking.customerNotes || undefined,
+          providerPhone: provider?.phoneNumber || undefined
+        });
+      }
+
+      // Send provider notification email
+      if (provider?.email) {
+        await sendProviderBookingNotificationEmail({
+          customerEmail: updatedBooking.customerEmail || '',
+          customerName: updatedBooking.customerName || 'Customer',
+          providerName: provider.displayName,
+          providerEmail: provider.email,
+          serviceName: updatedBooking.serviceType || 'Service',
+          serviceDate: updatedBooking.serviceDate || new Date(),
+          serviceTime: updatedBooking.serviceTime || 'TBD',
+          totalAmount: updatedBooking.totalAmount || 0,
+          bookingId: updatedBooking.id,
+          location: updatedBooking.serviceLocation || undefined,
+          notes: updatedBooking.customerNotes || undefined
+        });
+      }
+    } catch (emailError) {
+      // Don't fail the webhook if email fails
+      console.error('Failed to send email notifications:', emailError);
+    }
+
     // TODO: Create calendar events
-    // TODO: Send push notifications
 
   } catch (error) {
     console.error(`Error handling booking payment success for ${bookingId}:`, error);
@@ -319,7 +402,30 @@ async function handleBookingPaymentFailure(event: Stripe.Event, tx?: any) {
 
     console.log(`Booking payment failed: ${bookingId}`);
 
-    // TODO: Send payment failure notification to customer
+    // Send SMS notification to customer about payment failure
+    try {
+      const booking = await database
+        .select()
+        .from(bookingsTable)
+        .where(eq(bookingsTable.id, bookingId))
+        .limit(1)
+        .then(res => res[0]);
+
+      if (booking?.customerPhone) {
+        await sendCancellationNotification(
+          booking.customerPhone,
+          false, // isProvider
+          booking.serviceType || 'Service',
+          booking.serviceDate || new Date(),
+          booking.id,
+          undefined // no refund on payment failure
+        );
+      }
+    } catch (smsError) {
+      console.error('Failed to send payment failure SMS:', smsError);
+    }
+
+    // TODO: Send payment failure email to customer
     // TODO: Release time slot for rebooking
 
   } catch (error) {
