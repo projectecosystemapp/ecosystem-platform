@@ -331,7 +331,7 @@ export function createFeeBreakdown(fees: FeeCalculationResult): Array<{
     breakdown.push({
       label: 'Guest Service Fee',
       amount: fees.displayAmounts.guestSurcharge,
-      type: 'surcharge' as const
+      type: 'charge' as const
     });
   }
   
@@ -344,7 +344,7 @@ export function createFeeBreakdown(fees: FeeCalculationResult): Array<{
     {
       label: 'Platform Fee',
       amount: fees.displayAmounts.platformFee,
-      type: 'fee' as const
+      type: 'charge' as const
     },
     {
       label: 'Provider Payout',
