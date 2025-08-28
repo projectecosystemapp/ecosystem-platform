@@ -97,9 +97,9 @@ async function handleCheckAvailability(req: NextRequest, context: ApiContext) {
         subtotal: subtotal,
         fees: {
           platformFee: fees.platformFee,
-          guestSurcharge: isGuest ? fees.customerTotal - subtotal : 0,
+          guestSurcharge: isGuest ? fees.totalAmount - subtotal : 0,
         },
-        total: fees.customerTotal,
+        total: fees.totalAmount,
         currency: "usd",
       },
       booking: {

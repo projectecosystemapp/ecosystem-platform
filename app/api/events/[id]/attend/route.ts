@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { registerEventAttendance, checkEventAvailability, getEventById } from "@/db/queries/events-queries";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody, ApiContext } from "@/lib/security/api-handler";
 import { db } from "@/db/db";
@@ -82,13 +82,14 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
     }
     
     // Check if there are enough spots
-    if (availability.availableSpots !== null && body.numberOfGuests > availability.availableSpots) {
-      return createApiError(`Only ${availability.availableSpots} spots available`, { 
+    const availableSpots = availability.availableSpots ?? 0;
+    if (availableSpots > 0 && body.numberOfGuests > availableSpots) {
+      return createApiError(`Only ${availableSpots} spots available`, { 
         status: 400,
         code: "INSUFFICIENT_SPOTS",
         details: { 
           requested: body.numberOfGuests,
-          available: availability.availableSpots 
+          available: availableSpots 
         }
       });
     }
@@ -100,10 +101,15 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
     }
     
     // Determine price
-    let unitPrice = availability.price;
+    let unitPrice = availability.price ?? 0;
     const canUseEarlyBird = availability.earlyBirdPrice !== null && body.useEarlyBird;
     if (canUseEarlyBird) {
       unitPrice = availability.earlyBirdPrice!;
+    }
+    
+    // Ensure we have a valid price
+    if (unitPrice <= 0) {
+      return createApiError("Event pricing not configured", { status: 400 });
     }
     
     const totalAmount = unitPrice * body.numberOfGuests;
@@ -118,6 +124,12 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
     let customerPhone = body.guestPhone;
     
     if (!isGuestBooking) {
+      // Get current user info
+      const user = await currentUser();
+      if (!user) {
+        return createApiError("User not found", { status: 401 });
+      }
+      
       [profile] = await db
         .select()
         .from(profilesTable)
@@ -128,9 +140,11 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
         return createApiError("User profile not found", { status: 404 });
       }
       
-      customerEmail = profile.email;
-      customerName = profile.name;
-      customerPhone = profile.phoneNumber;
+      customerEmail = profile.email || user.emailAddresses[0]?.emailAddress || "";
+      customerName = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}` 
+        : user.username || "Customer";
+      customerPhone = null; // Profile table doesn't store phone
     }
     
     // Create booking record
@@ -159,7 +173,6 @@ async function handleAttendEvent(req: NextRequest, context: ApiContext) {
         metadata: {
           numberOfGuests: body.numberOfGuests,
           dietaryRestrictions: body.dietaryRestrictions,
-          earlyBirdApplied: canUseEarlyBird,
         },
         customerNotes: body.specialRequests,
       })

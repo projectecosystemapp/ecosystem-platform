@@ -7,7 +7,11 @@
 
 import { NextResponse } from 'next/server';
 import { ZodError, ZodSchema } from 'zod';
-import type { ApiResponse, ApiError, ErrorCode } from '@/types/core';
+import type { ApiResponse as ApiResponseType, ApiError, ErrorCode } from '@/types/core';
+
+// Re-export types for convenience
+export type ApiResponse<T = any> = ApiResponseType<T>;
+export type { ApiError, ErrorCode } from '@/types/core';
 
 /**
  * Create a successful API response
@@ -15,12 +19,12 @@ import type { ApiResponse, ApiError, ErrorCode } from '@/types/core';
 export function successResponse<T>(
   data: T,
   status: number = 200
-): NextResponse<ApiResponse<T>> {
+): NextResponse<ApiResponseType<T>> {
   return NextResponse.json(
     {
       success: true,
       data,
-    } satisfies ApiResponse<T>,
+    } satisfies ApiResponseType<T>,
     { status }
   );
 }
@@ -33,7 +37,7 @@ export function errorResponse(
   message: string,
   status: number = 400,
   details?: Record<string, any>
-): NextResponse<ApiResponse<never>> {
+): NextResponse<ApiResponseType<never>> {
   const error: ApiError = {
     code,
     message,
@@ -45,7 +49,7 @@ export function errorResponse(
     {
       success: false,
       error,
-    } satisfies ApiResponse<never>,
+    } satisfies ApiResponseType<never>,
     { status }
   );
 }
@@ -55,7 +59,7 @@ export function errorResponse(
  */
 export function validationErrorResponse(
   error: ZodError
-): NextResponse<ApiResponse<never>> {
+): NextResponse<ApiResponseType<never>> {
   const details = error.issues.reduce((acc, err) => {
     const path = err.path.join('.');
     acc[path] = err.message;
@@ -75,7 +79,7 @@ export function validationErrorResponse(
  */
 export function databaseErrorResponse(
   error: unknown
-): NextResponse<ApiResponse<never>> {
+): NextResponse<ApiResponseType<never>> {
   console.error('Database error:', error);
   
   if (error instanceof Error && error.message.includes('unique constraint')) {
@@ -98,7 +102,7 @@ export function databaseErrorResponse(
  */
 export function stripeErrorResponse(
   error: unknown
-): NextResponse<ApiResponse<never>> {
+): NextResponse<ApiResponseType<never>> {
   console.error('Stripe error:', error);
   
   if (error && typeof error === 'object' && 'type' in error) {
@@ -134,7 +138,7 @@ export function stripeErrorResponse(
  */
 export function unauthorizedResponse(
   message: string = 'Authentication required'
-): NextResponse<ApiResponse<never>> {
+): NextResponse<ApiResponseType<never>> {
   return errorResponse('UNAUTHORIZED', message, 401);
 }
 
@@ -143,7 +147,7 @@ export function unauthorizedResponse(
  */
 export function forbiddenResponse(
   message: string = 'Insufficient permissions'
-): NextResponse<ApiResponse<never>> {
+): NextResponse<ApiResponseType<never>> {
   return errorResponse('FORBIDDEN', message, 403);
 }
 
@@ -152,14 +156,14 @@ export function forbiddenResponse(
  */
 export function notFoundResponse(
   resource: string = 'Resource'
-): NextResponse<ApiResponse<never>> {
+): NextResponse<ApiResponseType<never>> {
   return errorResponse('NOT_FOUND', `${resource} not found`, 404);
 }
 
 /**
  * Handle rate limit errors
  */
-export function rateLimitResponse(): NextResponse<ApiResponse<never>> {
+export function rateLimitResponse(): NextResponse<ApiResponseType<never>> {
   return errorResponse(
     'RATE_LIMITED',
     'Too many requests. Please try again later.',
@@ -173,7 +177,7 @@ export function rateLimitResponse(): NextResponse<ApiResponse<never>> {
 export async function validateRequestBody<T>(
   request: Request,
   schema: ZodSchema<T>
-): Promise<T | NextResponse<ApiResponse<never>>> {
+): Promise<T | NextResponse<ApiResponseType<never>>> {
   try {
     const body = await request.json();
     const result = schema.safeParse(body);
@@ -198,7 +202,7 @@ export async function validateRequestBody<T>(
 export function validateQueryParams<T>(
   searchParams: URLSearchParams,
   schema: ZodSchema<T>
-): T | NextResponse<ApiResponse<never>> {
+): T | NextResponse<ApiResponseType<never>> {
   const params = Object.fromEntries(searchParams.entries());
   const result = schema.safeParse(params);
   
@@ -213,9 +217,9 @@ export function validateQueryParams<T>(
  * Wrap async route handlers with error handling
  */
 export function withErrorHandling<T>(
-  handler: (request: Request) => Promise<NextResponse<ApiResponse<T>>>
+  handler: (request: Request) => Promise<NextResponse<ApiResponseType<T>>>
 ) {
-  return async (request: Request): Promise<NextResponse<ApiResponse<T | never>>> => {
+  return async (request: Request): Promise<NextResponse<ApiResponseType<T | never>>> => {
     try {
       return await handler(request);
     } catch (error) {
@@ -243,11 +247,31 @@ export function withErrorHandling<T>(
 }
 
 /**
+ * Alternative name for withErrorHandling to match import expectations
+ */
+export const withErrorHandler = withErrorHandling;
+
+/**
+ * Extract pagination parameters from URL search params
+ */
+export function getPaginationParams(searchParams: URLSearchParams): {
+  page: number;
+  limit: number;
+  offset: number;
+} {
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));
+  const offset = (page - 1) * limit;
+  
+  return { page, limit, offset };
+}
+
+/**
  * Type guard to check if response is an error
  */
 export function isErrorResponse<T>(
-  response: T | NextResponse<ApiResponse<never>>
-): response is NextResponse<ApiResponse<never>> {
+  response: T | NextResponse<ApiResponseType<never>>
+): response is NextResponse<ApiResponseType<never>> {
   return response instanceof NextResponse;
 }
 

@@ -4,7 +4,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody } from "@/lib/security/api-handler";
 import { db } from "@/db/db";
-import { bookingsTable, customersTable, spacesTable } from "@/db/schema";
+import { bookingsTable, spacesTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { calculateFees } from "@/lib/fees";
 import Stripe from "stripe";
@@ -129,7 +129,7 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
     let customerPhone: string | null = null;
     
     if (isGuest) {
-      // Guest checkout
+      // Guest checkout - use guest email as customer ID
       if (!body.guestInfo) {
         return createApiError("Guest information is required for guest checkout", { status: 400 });
       }
@@ -137,28 +137,7 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
       customerEmail = body.guestInfo.email;
       customerName = `${body.guestInfo.firstName} ${body.guestInfo.lastName}`;
       customerPhone = body.guestInfo.phone;
-      
-      // Create or get guest customer record
-      const existingCustomer = await db
-        .select()
-        .from(customersTable)
-        .where(eq(customersTable.email, customerEmail))
-        .limit(1);
-      
-      if (existingCustomer.length > 0) {
-        customerId = existingCustomer[0].id;
-      } else {
-        const [newCustomer] = await db
-          .insert(customersTable)
-          .values({
-            email: customerEmail,
-            name: customerName,
-            phone: customerPhone,
-            isGuest: true,
-          })
-          .returning();
-        customerId = newCustomer.id;
-      }
+      customerId = `guest:${customerEmail}`;
     } else {
       // Authenticated user checkout
       const user = await currentUser();
@@ -170,28 +149,7 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
       customerName = user.firstName && user.lastName 
         ? `${user.firstName} ${user.lastName}` 
         : user.username || "Customer";
-      
-      // Get or create customer record
-      const existingCustomer = await db
-        .select()
-        .from(customersTable)
-        .where(eq(customersTable.userId, userId))
-        .limit(1);
-      
-      if (existingCustomer.length > 0) {
-        customerId = existingCustomer[0].id;
-      } else {
-        const [newCustomer] = await db
-          .insert(customersTable)
-          .values({
-            userId,
-            email: customerEmail,
-            name: customerName,
-            isGuest: false,
-          })
-          .returning();
-        customerId = newCustomer.id;
-      }
+      customerId = userId;
     }
     
     // Calculate fees
@@ -203,39 +161,38 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
     const fees = calculateFees(subtotal, isGuest);
     
     // Create booking record
-    const bookingStatus = space.requiresApproval ? "PENDING_PROVIDER" : "ACCEPTED";
+    const bookingStatus = space.requiresApproval ? "pending" : "confirmed";
     
     const [booking] = await db
       .insert(bookingsTable)
       .values({
         customerId,
-        customerEmail,
-        customerName,
-        customerPhone,
         providerId: space.providerId,
-        serviceId: spaceId,
-        bookingType: "space",
-        bookingStartDateTime: body.startDate,
-        bookingEndDateTime: body.endDate,
-        numberOfGuests: body.numberOfGuests,
+        serviceName: space.name,
+        servicePrice: baseAmount.toString(),
+        serviceDuration: 60, // Default duration in minutes
+        bookingDate: body.startDate,
+        startTime: body.startDate.toTimeString().slice(0, 5), // HH:MM format
+        endTime: body.endDate.toTimeString().slice(0, 5), // HH:MM format
         status: bookingStatus,
-        baseAmount: baseAmount.toString(),
+        totalAmount: fees.totalAmount.toString(),
         platformFee: fees.platformFee.toString(),
-        providerEarnings: fees.providerAmount.toString(),
-        totalAmount: fees.customerTotal.toString(),
-        additionalFees: {
-          cleaningFee,
-          securityDeposit,
-          guestSurcharge: isGuest ? fees.guestSurcharge : 0,
-        },
-        specialRequests: body.specialRequests,
-        customerMessage: body.message,
+        providerPayout: fees.providerPayout.toString(),
+        customerNotes: body.message,
+        isGuestBooking: isGuest,
+        guestEmail: isGuest ? customerEmail : null,
+        bookingType: "space",
+        spaceId: spaceId,
         metadata: {
+          numberOfGuests: body.numberOfGuests,
           spaceType: space.spaceType,
           instantBooking: space.instantBooking,
           priceType: availability.priceType,
           agreedToTerms: body.agreedToTerms,
           agreedToCancellationPolicy: body.agreedToCancellationPolicy,
+          cleaningFee,
+          securityDeposit,
+          guestSurcharge: isGuest ? fees.guestSurcharge : 0,
         },
       })
       .returning();
@@ -247,7 +204,7 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
     if (!space.requiresApproval || space.instantBooking) {
       // Create Stripe payment intent
       const paymentIntentData: Stripe.PaymentIntentCreateParams = {
-        amount: Math.round(fees.customerTotal * 100), // Convert to cents
+        amount: Math.round(fees.totalAmount * 100), // Convert to cents
         currency: "usd",
         metadata: {
           bookingId: booking.id,
@@ -272,8 +229,7 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
         .update(bookingsTable)
         .set({
           stripePaymentIntentId: paymentIntent.id,
-          status: "PAYMENT_PENDING",
-          updatedAt: new Date(),
+          status: "pending",
         })
         .where(eq(bookingsTable.id, booking.id));
     }
@@ -293,7 +249,7 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
           securityDeposit,
           platformFee: fees.platformFee,
           guestSurcharge: isGuest ? fees.guestSurcharge : 0,
-          totalAmount: fees.customerTotal,
+          totalAmount: fees.totalAmount,
           requiresApproval: space.requiresApproval,
           instantBooking: space.instantBooking,
           cancellationPolicy: space.cancellationPolicy,
