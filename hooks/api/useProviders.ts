@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
-import {
+import type {
+  UseProviderSearch,
   Provider,
-  ProviderSearchFilters,
+  ProviderFilters,
+  ProviderSearchResult,
   ProviderSearchResponse,
   ProviderResponse,
   ProviderAvailabilityResponse,
   ProviderAvailabilityParams,
   ApiError,
-} from "@/types/api/providers";
+} from "@/types/search";
 
 /**
  * Custom hooks for provider-related API calls
@@ -40,18 +42,12 @@ async function apiRequest<T>(
   return response.json();
 }
 
-// Hook for searching providers
-export function useProviderSearch(initialFilters: ProviderSearchFilters = {}) {
-  const [providers, setProviders] = useState<Provider[]>([]);
+// Hook for searching providers - implements canonical UseProviderSearch contract
+export function useProviderSearch(initialFilters: ProviderFilters = {}): UseProviderSearch {
+  const [result, setResult] = useState<ProviderSearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<ProviderSearchFilters>(initialFilters);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    totalPages: 0,
-    hasMore: false,
-  });
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [filters, setFilters] = useState<ProviderFilters>(initialFilters);
 
   const searchProviders = useCallback(async (searchFilters: ProviderSearchFilters = {}) => {
     setIsLoading(true);

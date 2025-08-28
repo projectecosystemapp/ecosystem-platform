@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getThingById, updateThing, deleteThing } from "@/db/queries/things-queries";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody } from "@/lib/security/api-handler";
+import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody, type ApiContext } from "@/lib/security/api-handler";
 
 /**
  * Individual Thing API
@@ -79,7 +79,7 @@ const updateThingSchema = z.object({
   preferredContact: z.enum(["app", "email", "phone", "text"]).optional(),
   
   // Additional details
-  specifications: z.record(z.any()).optional(),
+  specifications: z.record(z.string(), z.any()).optional(),
   tags: z.array(z.string()).max(10).optional(),
   yearManufactured: z.number().min(1900).max(new Date().getFullYear() + 1).optional(),
   dimensions: z.object({
@@ -106,8 +106,9 @@ const updateThingSchema = z.object({
 /**
  * GET handler - Get a single thing by ID
  */
-async function handleGetThing(req: NextRequest, params: { id: string }) {
+async function handleGetThing(req: NextRequest, context: ApiContext) {
   try {
+    const params = context.params as { id: string };
     const { id } = params;
     
     // Check if we should increment view count (not for owner)
@@ -188,9 +189,10 @@ async function handleGetThing(req: NextRequest, params: { id: string }) {
 /**
  * PATCH handler - Update a thing (owner only)
  */
-async function handleUpdateThing(req: NextRequest, params: { id: string }, context: any) {
+async function handleUpdateThing(req: NextRequest, context: ApiContext) {
   try {
     const { userId } = context;
+    const params = context.params as { id: string };
     const { id } = params;
     const body = getValidatedBody<z.infer<typeof updateThingSchema>>(req);
     
@@ -252,9 +254,10 @@ async function handleUpdateThing(req: NextRequest, params: { id: string }, conte
 /**
  * DELETE handler - Delete a thing (owner only)
  */
-async function handleDeleteThing(req: NextRequest, params: { id: string }, context: any) {
+async function handleDeleteThing(req: NextRequest, context: ApiContext) {
   try {
     const { userId } = context;
+    const params = context.params as { id: string };
     const { id } = params;
     
     // Get the thing to check ownership

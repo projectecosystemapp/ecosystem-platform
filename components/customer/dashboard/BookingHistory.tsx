@@ -48,13 +48,6 @@ export function BookingHistory({ customerId, initialBookings = [] }: BookingHist
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'upcoming' | 'past' | 'cancelled'>('all');
 
-  // Fetch bookings from API
-  useEffect(() => {
-    if (initialBookings.length === 0) {
-      fetchBookings();
-    }
-  }, [customerId, initialBookings.length, fetchBookings]);
-
   const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
@@ -71,6 +64,13 @@ export function BookingHistory({ customerId, initialBookings = [] }: BookingHist
       setLoading(false);
     }
   }, [customerId]);
+
+  // Fetch bookings from API
+  useEffect(() => {
+    if (initialBookings.length === 0) {
+      fetchBookings();
+    }
+  }, [customerId, initialBookings.length, fetchBookings]);
 
   // Filter bookings by status
   const filterBookings = (bookings: Booking[], filter: string) => {

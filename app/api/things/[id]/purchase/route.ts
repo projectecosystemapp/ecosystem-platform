@@ -160,17 +160,33 @@ async function handlePurchaseThing(req: NextRequest, context: { userId?: string 
       });
       
       // Create booking record for the purchase
+      const now = new Date();
       const [booking] = await db
         .insert(bookingsTable)
         .values({
           customerId: userId,
           providerId: thing.sellerId,
-          serviceType: 'marketplace_purchase',
+          bookingType: 'service', // Using 'service' for marketplace purchases
           status: 'PAYMENT_PENDING',
+          
+          // Required booking fields
+          serviceName: thing.title,
+          servicePrice: fees.providerPayout.toString(), // Base price provider receives
+          serviceDuration: 0, // Instant purchase, no duration
+          bookingDate: now,
+          startTime: now.toTimeString().slice(0, 5), // Format: "HH:MM"
+          endTime: now.toTimeString().slice(0, 5), // Same as start for instant purchase
+          
+          // Payment fields
+          stripePaymentIntentId: paymentIntent.id,
           totalAmount: fees.totalAmount.toString(),
           platformFee: fees.platformFee.toString(),
           providerPayout: fees.providerPayout.toString(),
-          currency: thing.currency || 'USD',
+          
+          // Additional info
+          isGuestBooking: false,
+          
+          // Metadata with all thing purchase details
           metadata: {
             thingId: thingId,
             thingTitle: thing.title,
@@ -180,10 +196,8 @@ async function handlePurchaseThing(req: NextRequest, context: { userId?: string 
             buyerNotes: body.buyerNotes,
             itemPrice: itemPrice,
             shippingCost: shippingCost,
+            purchaseType: 'marketplace_thing',
           },
-          paymentIntentId: paymentIntent.id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
         })
         .returning();
       

@@ -337,15 +337,17 @@ async function handleCreateSpace(req: NextRequest, context: any) {
       .trim();
 
     // Transform numeric fields to strings for database storage
+    // Explicitly handle the conversion to ensure proper typing
     const transformedBody = {
       ...body,
-      ...(body.hourlyRate !== undefined && { hourlyRate: body.hourlyRate.toString() }),
-      ...(body.halfDayRate !== undefined && { halfDayRate: body.halfDayRate.toString() }),
-      ...(body.dailyRate !== undefined && { dailyRate: body.dailyRate.toString() }),
-      ...(body.weeklyRate !== undefined && { weeklyRate: body.weeklyRate.toString() }),
-      ...(body.monthlyRate !== undefined && { monthlyRate: body.monthlyRate.toString() }),
-      ...(body.cleaningFee !== undefined && { cleaningFee: body.cleaningFee.toString() }),
-      ...(body.securityDeposit !== undefined && { securityDeposit: body.securityDeposit.toString() }),
+      // Convert numeric fields to strings or null for proper database storage
+      hourlyRate: body.hourlyRate !== undefined ? body.hourlyRate.toString() : null,
+      halfDayRate: body.halfDayRate !== undefined ? body.halfDayRate.toString() : null,
+      dailyRate: body.dailyRate !== undefined ? body.dailyRate.toString() : null,
+      weeklyRate: body.weeklyRate !== undefined ? body.weeklyRate.toString() : null,
+      monthlyRate: body.monthlyRate !== undefined ? body.monthlyRate.toString() : null,
+      cleaningFee: body.cleaningFee !== undefined ? body.cleaningFee.toString() : null,
+      securityDeposit: body.securityDeposit !== undefined ? body.securityDeposit.toString() : null,
     };
 
     // Create the space

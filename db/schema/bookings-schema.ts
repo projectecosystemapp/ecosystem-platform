@@ -83,6 +83,17 @@ export const bookingsTable = pgTable("bookings", {
     // Service specific
     location?: string;
     urgency?: string;
+    
+    // Marketplace purchase specific
+    thingId?: string;
+    thingTitle?: string;
+    deliveryMethod?: string;
+    shippingAddress?: any;
+    pickupSchedule?: any;
+    buyerNotes?: string;
+    itemPrice?: number;
+    shippingCost?: number;
+    purchaseType?: string;
   }>().default({}),
   
   // Timestamps

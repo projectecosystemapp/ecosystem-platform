@@ -10,9 +10,9 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/sidebar";
 import { revalidatePath } from "next/cache";
-import CancellationPopup from "@/components/cancellation-popup";
+// import CancellationPopup from "@/components/cancellation-popup";
 import WelcomeMessagePopup from "@/components/welcome-message-popup";
-import PaymentSuccessPopup from "@/components/payment-success-popup";
+// import PaymentSuccessPopup from "@/components/payment-success-popup";
 import { providersTable } from "@/db/schema/providers-schema";
 import { db } from "@/db/db";
 import { eq } from "drizzle-orm";
@@ -112,12 +112,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <WelcomeMessagePopup profile={profile} />
       
       {/* Show payment success popup - component handles visibility logic */}
-      <PaymentSuccessPopup profile={profile} />
+      {/* <PaymentSuccessPopup profile={profile} /> */}
       
       {/* Show cancellation popup directly if status is canceled */}
-      {profile.status === "canceled" && (
+      {/* {profile.status === "canceled" && (
         <CancellationPopup profile={profile} />
-      )}
+      )} */}
       
       {/* Sidebar component with profile data and user email */}
       <Sidebar 

@@ -306,7 +306,7 @@ function calculateRelevanceScore(thing: any, query: any): number {
   const brand = thing.brand?.toLowerCase() || '';
   const model = thing.model?.toLowerCase() || '';
   
-  searchTerms.forEach(term => {
+  searchTerms.forEach((term: string) => {
     // Title matches are worth the most
     if (title.includes(term)) score += 10;
     if (title.startsWith(term)) score += 5;

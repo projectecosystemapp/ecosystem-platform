@@ -76,7 +76,7 @@ export default function BaseMap({
         zoom,
         interactive,
         attributionControl: showControls,
-        logoPosition: showControls ? 'bottom-right' : false,
+        logoPosition: showControls ? 'bottom-right' : undefined,
       });
 
       // Add navigation controls if enabled

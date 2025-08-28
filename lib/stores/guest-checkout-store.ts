@@ -21,6 +21,7 @@ export interface GuestCheckoutState {
   setGuestInfo: (info: GuestInfo) => void;
   updateGuestInfo: (updates: Partial<GuestInfo>) => void;
   clearGuestSession: () => void;
+  resetGuestCheckout: () => void;
   
   // Computed getters
   hasCompleteGuestInfo: () => boolean;
@@ -68,6 +69,12 @@ export const useGuestCheckoutStore = create<GuestCheckoutState>()(
           }),
           
         clearGuestSession: () =>
+          set((state) => {
+            state.isGuestCheckout = false;
+            state.guestInfo = null;
+          }),
+          
+        resetGuestCheckout: () =>
           set((state) => {
             state.isGuestCheckout = false;
             state.guestInfo = null;

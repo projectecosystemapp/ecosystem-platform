@@ -124,7 +124,6 @@ export default function ContextualSearch() {
             )}
             style={{
               borderColor: isFocused ? theme.primary : theme.border,
-              ringColor: theme.primary,
             }}
             aria-label={`Search ${tabConfig.label.toLowerCase()}`}
           />

@@ -271,8 +271,7 @@ export const GET = createSecureApiHandler(
     requireAuth: false,
     rateLimit: { requests: 100, window: '1m' },
     auditLog: false,
-    allowedMethods: ['GET'],
-    cacheControl: 'public, max-age=300', // Cache for 5 minutes
+    allowedMethods: ['GET']
   }
 );
 

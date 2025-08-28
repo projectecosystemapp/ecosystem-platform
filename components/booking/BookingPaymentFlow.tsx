@@ -188,7 +188,7 @@ export function BookingPaymentFlow({
   const renderServiceStep = () => (
     <div className="space-y-4">
       <div className="grid gap-3">
-        {provider.services.filter(s => s.active !== false).map((service) => (
+        {provider.services.filter(s => (s as any).active !== false).map((service) => (
           <Card
             key={service.id}
             className={`cursor-pointer transition-all ${

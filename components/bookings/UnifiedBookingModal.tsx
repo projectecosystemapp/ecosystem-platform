@@ -606,8 +606,8 @@ export function UnifiedBookingModal({
 
                 {/* Fee breakdown */}
                 <FeeBreakdown 
-                  baseAmount={formData.offerAmount || formData.baseAmount}
-                  isGuest={!isSignedIn}
+                  servicePrice={formData.offerAmount || formData.baseAmount}
+                  isAuthenticated={!!isSignedIn}
                 />
 
                 {/* Trust signals */}
