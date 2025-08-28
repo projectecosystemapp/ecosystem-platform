@@ -5,14 +5,13 @@
  */
 "use client";
 
-import { Home, Settings, Database, Target, Users, Sparkles, CreditCard, DollarSign } from "lucide-react";
+import { Home, Settings, Database, Target, Users, Sparkles, CreditCard, DollarSign, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { SelectProfile } from "@/db/schema/profiles-schema";
-import { CreditUsageDisplay } from "@/components/credit-usage-display";
 import UpgradePlanPopup from "@/components/upgrade-plan-popup";
 import { useState, useEffect, useCallback } from "react";
 
@@ -41,6 +40,7 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
   
   const navItems = [
     { href: "/dashboard", icon: <Home size={16} />, label: "Home" },
+    { href: "/dashboard/messages", icon: <MessageSquare size={16} />, label: "Messages" },
     { href: "/dashboard/settings", icon: <Settings size={16} />, label: "Settings" },
     { href: "/dashboard/data-source", icon: <Database size={16} />, label: "Data source" },
     { href: "/dashboard/targets", icon: <Target size={16} />, label: "Targets" },
@@ -77,7 +77,7 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
         />
       )}
       
-      <div className="h-screen w-[60px] md:w-[220px] bg-white/60 backdrop-blur-xl border-r border-white/40 flex flex-col justify-between py-5 relative overflow-hidden">
+      <div className="h-screen w-[60px] lg:w-[220px] bg-white/60 backdrop-blur-xl border-r border-white/40 flex flex-col justify-between py-5 relative overflow-hidden">
         {/* Glassmorphism effects */}
         <motion.div 
           className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-primary/5 pointer-events-none"
@@ -102,14 +102,14 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
         <div className="px-3 mb-8 relative z-10">
           <Link href="/dashboard">
             <motion.div 
-              className="flex items-center justify-center md:justify-start"
+              className="flex items-center justify-center lg:justify-start"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="hidden md:block">
+              <div className="hidden lg:block">
                 <span className="font-bold text-lg">App Name</span>
               </div>
-              <div className="block md:hidden text-center">
+              <div className="block lg:hidden text-center">
                 <span className="font-bold text-sm">A</span>
               </div>
             </motion.div>
@@ -127,7 +127,7 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
                 onClick={(e) => handleNavItemClick(e, item.href)}
               >
                 <motion.div 
-                  className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${
+                  className={`flex items-center py-3 px-3 rounded-lg cursor-pointer transition-all min-h-[44px] ${
                     isActive(item.href) 
                       ? "bg-[#1a1a1a] text-white shadow-sm" 
                       : "text-gray-600 hover:bg-gray-100/80 hover:border-gray-200/50 hover:shadow-md"
@@ -140,10 +140,10 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
                   whileTap={{ scale: 0.98 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <div className="flex items-center justify-center">
+                  <div className="flex items-center justify-center min-w-[20px]">
                     {item.icon}
                   </div>
-                  <span className={`ml-3 hidden md:block text-sm font-medium`}>
+                  <span className={`ml-3 hidden lg:block text-sm font-medium`}>
                     {item.label}
                   </span>
                 </motion.div>
@@ -152,37 +152,15 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
           </div>
         </nav>
 
-        {/* Bottom Section - Account and Subscription Management */}
+        {/* Bottom Section - Account Management */}
         <div className="mt-auto pt-4 relative z-10">
-          {/* Subscription Management Section */}
+          {/* Account Management Section */}
           <div className="px-3 mb-4">
             {/* Subtle section divider */}
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-4" />
             
-            {/* Upgrade Button - Links to pricing page */}
-            <Link href="/pricing">
-              <motion.div
-                whileHover={{ 
-                  scale: 1.03,
-                  transition: { duration: 0.2 }
-                }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <Button 
-                  variant="default" 
-                  size="sm"
-                  className="w-full flex items-center justify-center md:justify-start gap-1.5 py-1.5 h-auto transition-colors shadow-sm mb-3 relative overflow-hidden group"
-                >
-                  {/* Button hover effect */}
-                  <span className="absolute inset-0 w-full h-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <Sparkles size={14} className="relative z-10" />
-                  <span className="hidden md:block text-xs font-medium relative z-10">Upgrade</span>
-                </Button>
-              </motion.div>
-            </Link>
-            
-            {/* Billing Button - Only visible for Pro members with Stripe */}
-            {profile?.stripeSubscriptionId && (
+            {/* Billing Button - Only visible for users with Stripe customer ID */}
+            {profile?.stripeCustomerId && (
               <Link 
                 href={process.env.NEXT_PUBLIC_STRIPE_PORTAL_LINK || "/dashboard/settings"}
                 target="_blank"
@@ -198,10 +176,10 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="w-full flex items-center justify-center md:justify-start gap-1.5 border-white/60 bg-white/70 hover:bg-white/90 hover:border-white py-1.5 h-auto transition-all shadow-sm hover:shadow-md"
+                    className="w-full flex items-center justify-center lg:justify-start gap-1.5 border-white/60 bg-white/70 hover:bg-white/90 hover:border-white py-2 h-auto min-h-[44px] transition-all shadow-sm hover:shadow-md"
                   >
                     <CreditCard size={14} className="text-gray-600" />
-                    <span className="hidden md:block text-xs">Billing</span>
+                    <span className="hidden lg:block text-xs">Billing</span>
                   </Button>
                 </motion.div>
               </Link>
@@ -210,10 +188,9 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
           
           {/* Credit Usage Display */}
           <div className="px-3 mb-4">
-            <div className="hidden md:block">
-              <CreditUsageDisplay />
+            <div className="hidden lg:block">
             </div>
-            <div className="block md:hidden text-center">
+            <div className="block lg:hidden text-center">
               <div className="bg-white/80 py-2 px-1 rounded-lg shadow-sm border border-white/80">
                 <div className="text-[10px] font-medium text-gray-600 mb-1">Credits</div>
                 <div className="flex justify-center">
@@ -245,7 +222,7 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
             }}
             whileTap={{ scale: 0.98 }}
           >
-            <div className="w-7 h-7 rounded-full overflow-hidden border border-white/80 flex items-center justify-center bg-white/80 shadow-sm">
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-white/80 flex items-center justify-center bg-white/80 shadow-sm">
               <UserButton 
                 afterSignOutUrl="/"
                 appearance={{
@@ -256,7 +233,7 @@ export default function Sidebar({ profile, userEmail, isProvider = false }: Side
                 }} 
               />
             </div>
-            <span className="text-xs text-gray-600 hidden md:block ml-3 font-medium truncate max-w-[120px]">
+            <span className="text-xs text-gray-600 hidden lg:block ml-3 font-medium truncate max-w-[120px]">
               {userEmail || "Account"}
             </span>
           </motion.div>

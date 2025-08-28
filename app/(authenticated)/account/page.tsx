@@ -279,7 +279,15 @@ export default async function AccountDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <ActivityFeed activities={recentActivity} />
+              <ActivityFeed activities={recentActivity.map(notification => ({
+                id: notification.id,
+                type: notification.type,
+                title: notification.title,
+                message: notification.body || '',  // Use body as message
+                metadata: notification.metadata,
+                createdAt: notification.createdAt,
+                read: notification.status === 'read' // Convert status to read boolean
+              }))} />
             </CardContent>
           </Card>
         </div>

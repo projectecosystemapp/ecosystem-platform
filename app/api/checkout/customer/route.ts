@@ -144,7 +144,7 @@ export const POST = withRateLimitRedis(
           businessName: providersTable.businessName,
           stripeConnectAccountId: providersTable.stripeConnectAccountId,
           stripeOnboardingComplete: providersTable.stripeOnboardingComplete,
-          commissionRate: providersTable.commissionRate,
+          // commissionRate removed - always 10% per constitution
           isActive: providersTable.isActive,
         })
         .from(providersTable)
@@ -237,8 +237,7 @@ export const POST = withRateLimitRedis(
       // Calculate all fees WITHOUT guest surcharge (isGuest: false)
       const fees = calculateFees({
         baseAmountCents,
-        isGuest: false, // Key difference: authenticated users don't pay guest surcharge
-        providerCommissionRate: provider.commissionRate ? parseFloat(provider.commissionRate) : undefined
+        isGuest: false // Key difference: authenticated users don't pay guest surcharge
       });
       
       // Generate unique identifiers

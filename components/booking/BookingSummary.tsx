@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { VerificationBadgeGroup, useProviderVerificationBadges } from "@/components/ui/verification-badge";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { FeeBreakdown } from "./FeeBreakdown";
@@ -31,7 +32,9 @@ interface BookingSummaryProps {
     rating?: number;
     reviewCount?: number;
     isVerified?: boolean;
-    commissionRate?: number;
+    stripeOnboardingComplete?: boolean;
+    hasInsurance?: boolean;
+    completedBookings?: number;
     currency?: string;
   };
   service: {
@@ -55,6 +58,15 @@ export function BookingSummary({
   showPriceBreakdown = true,
 }: BookingSummaryProps) {
   const { isSignedIn } = useAuth();
+  
+  const verificationBadges = useProviderVerificationBadges({
+    isVerified: provider.isVerified,
+    stripeOnboardingComplete: provider.stripeOnboardingComplete,
+    hasInsurance: provider.hasInsurance,
+    averageRating: provider.rating,
+    completedBookings: provider.completedBookings,
+  });
+
   // Format display values
   const formatTime = (timeStr: string) => {
     const [hours, minutes] = timeStr.split(":").map(Number);
@@ -77,11 +89,8 @@ export function BookingSummary({
     }).format(amount);
   };
 
-  // Calculate fees
-  // Note: This should ideally check if user is authenticated
-  // For now, we'll use the base rate - parent component should pass actual rate
-  const defaultRate = parseFloat(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || "10") / 100;
-  const platformFeeRate = provider.commissionRate || defaultRate;
+  // Calculate fees - Fixed 10% platform fee per constitution
+  const platformFeeRate = 0.10; // Always 10% platform fee
   const platformFee = service.price * platformFeeRate;
   const subtotal = service.price;
   const total = subtotal; // Customer pays full amount
@@ -114,16 +123,15 @@ export function BookingSummary({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
+              <div className="space-y-2">
                 <h3 className="font-semibold text-gray-900">
                   {provider.displayName}
                 </h3>
-                {provider.isVerified && (
-                  <Badge variant="secondary" className="text-xs">
-                    <Shield className="h-3 w-3 mr-1" />
-                    Verified
-                  </Badge>
-                )}
+                <VerificationBadgeGroup 
+                  verifications={verificationBadges}
+                  size="xs"
+                  maxDisplay={3}
+                />
               </div>
               {provider.location && (
                 <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">

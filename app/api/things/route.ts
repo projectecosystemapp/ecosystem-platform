@@ -3,7 +3,7 @@ import { searchThings, createThing } from "@/db/queries/things-queries";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody, getValidatedQuery } from "@/lib/security/api-handler";
-import { db } from "@/db";
+import { db } from "@/db/db";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq } from "drizzle-orm";
 

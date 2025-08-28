@@ -5,6 +5,7 @@ import {
   getProviderByUserId,
   getProviderById,
   getProviderBySlug,
+  getProviderBySlugWithReviews,
   updateProvider,
   searchProviders,
   getFeaturedProviders,
@@ -127,9 +128,9 @@ export async function getMyProviderProfileAction(): Promise<ActionResult<Provide
 }
 
 // Get provider profile by slug (public)
-export async function getProviderBySlugAction(slug: string): Promise<ActionResult<Provider | null>> {
+export async function getProviderBySlugAction(slug: string): Promise<ActionResult<any>> {
   try {
-    const provider = await getProviderBySlug(slug);
+    const provider = await getProviderBySlugWithReviews(slug);
     
     if (!provider || !provider.isActive) {
       return { isSuccess: false, message: "Provider not found" };

@@ -9,6 +9,7 @@ import {
   type NewProviderAvailability,
 } from "@/db/schema/providers-schema";
 import { eq, and, or, like, ilike, sql, inArray } from "drizzle-orm";
+import { getProviderReviewsWithCustomerInfo } from "./reviews-queries";
 
 // Create a new provider profile
 export async function createProvider(data: NewProvider): Promise<Provider> {
@@ -48,6 +49,38 @@ export async function getProviderBySlug(slug: string): Promise<Provider | null> 
     .where(eq(providersTable.slug, slug));
   
   return provider || null;
+}
+
+// Get provider by slug with reviews
+export async function getProviderBySlugWithReviews(slug: string): Promise<(Provider & { reviews: any[] }) | null> {
+  const [provider] = await db
+    .select()
+    .from(providersTable)
+    .where(eq(providersTable.slug, slug));
+  
+  if (!provider) {
+    return null;
+  }
+
+  // Fetch reviews with customer information
+  const reviews = await getProviderReviewsWithCustomerInfo(provider.id, {
+    limit: 50, // Fetch up to 50 most recent reviews
+  });
+
+  return {
+    ...provider,
+    reviews: reviews.map(review => ({
+      id: review.id,
+      rating: review.rating,
+      reviewText: review.reviewText,
+      createdAt: review.createdAt.toISOString(),
+      customerName: review.customerName,
+      customerAvatar: review.customerAvatar,
+      providerResponse: review.providerResponse,
+      providerRespondedAt: review.providerRespondedAt,
+      isVerifiedBooking: review.isVerifiedBooking,
+    })),
+  };
 }
 
 // Update provider profile

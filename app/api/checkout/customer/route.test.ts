@@ -102,7 +102,7 @@ describe('/api/checkout/customer', () => {
                 businessName: 'Test Provider',
                 stripeConnectAccountId: 'acct_123',
                 stripeOnboardingComplete: true,
-                commissionRate: '0.10',
+                // commissionRate removed - always 10% per constitution
                 isActive: true
               }
             ])
@@ -315,7 +315,7 @@ describe('/api/checkout/customer', () => {
                 businessName: 'Test Provider',
                 stripeConnectAccountId: 'acct_123',
                 stripeOnboardingComplete: true,
-                commissionRate: '0.10',
+                // commissionRate removed - always 10% per constitution
                 isActive: false // Inactive provider
               }
             ])
@@ -372,7 +372,7 @@ describe('/api/checkout/customer', () => {
                 businessName: 'Test Provider',
                 stripeConnectAccountId: 'acct_123',
                 stripeOnboardingComplete: true,
-                commissionRate: '0.10',
+                // commissionRate removed - always 10% per constitution
                 isActive: true
               }
             ])
@@ -422,8 +422,8 @@ describe('/api/checkout/customer', () => {
     // Verify fee calculation called with isGuest: false
     expect(mockFeeCalculator.calculateFees).toHaveBeenCalledWith({
       baseAmountCents: 10000,
-      isGuest: false, // Key verification: no guest surcharge for authenticated users
-      providerCommissionRate: 0.10
+      isGuest: false // Key verification: no guest surcharge for authenticated users
+      // No commission rate - always fixed at 10% per constitution
     });
   });
 });

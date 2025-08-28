@@ -112,16 +112,102 @@ export default function MarketplacePage() {
         params.append("category", initialCategory);
       }
 
-      // Add filters
+      // Add common filters
       if (filters.priceRange) {
         params.append("minPrice", filters.priceRange.min.toString());
         params.append("maxPrice", filters.priceRange.max.toString());
       }
 
-      if (location) {
-        params.append("lat", location.lat.toString());
-        params.append("lng", location.lng.toString());
-        params.append("radius", (location.radius || 10).toString());
+      if (filters.location || location) {
+        const loc = filters.location || location;
+        params.append("lat", loc.lat.toString());
+        params.append("lng", loc.lng.toString());
+        params.append("radius", (loc.radius || 10).toString());
+      }
+
+      if (filters.rating) {
+        params.append("minRating", filters.rating.toString());
+      }
+
+      // Add service-specific filters
+      if (filters.availability) {
+        params.append("availability", filters.availability);
+      }
+
+      if (filters.instantBooking !== undefined) {
+        params.append("instantBooking", filters.instantBooking.toString());
+      }
+
+      if (filters.providerVerified !== undefined) {
+        params.append("providerVerified", filters.providerVerified.toString());
+      }
+
+      // Add event-specific filters
+      if (filters.eventDateRange) {
+        if (filters.eventDateRange.start) {
+          params.append("startDate", filters.eventDateRange.start.toISOString());
+        }
+        if (filters.eventDateRange.end) {
+          params.append("endDate", filters.eventDateRange.end.toISOString());
+        }
+      }
+
+      if (filters.isVirtual !== undefined) {
+        params.append("isOnline", filters.isVirtual.toString());
+      }
+
+      if (filters.hasTickets !== undefined) {
+        params.append("hasSpots", filters.hasTickets.toString());
+      }
+
+      // Add space-specific filters
+      if (filters.spaceCapacity) {
+        if (filters.spaceCapacity.min !== undefined) {
+          params.append("minCapacity", filters.spaceCapacity.min.toString());
+        }
+        if (filters.spaceCapacity.max !== undefined) {
+          params.append("maxCapacity", filters.spaceCapacity.max.toString());
+        }
+      }
+
+      if (filters.squareFeet) {
+        if (filters.squareFeet.min !== undefined) {
+          params.append("minSize", filters.squareFeet.min.toString());
+        }
+        if (filters.squareFeet.max !== undefined) {
+          params.append("maxSize", filters.squareFeet.max.toString());
+        }
+      }
+
+      if (filters.amenities && filters.amenities.length > 0) {
+        filters.amenities.forEach(amenity => {
+          params.append("amenities[]", amenity);
+        });
+      }
+
+      if (filters.priceUnit) {
+        params.append("priceUnit", filters.priceUnit);
+      }
+
+      // Add thing-specific filters
+      if (filters.condition) {
+        params.append("condition", filters.condition);
+      }
+
+      if (filters.brand) {
+        params.append("brand", filters.brand);
+      }
+
+      if (filters.isNegotiable !== undefined) {
+        params.append("negotiable", filters.isNegotiable.toString());
+      }
+
+      if (filters.shippingAvailable !== undefined) {
+        params.append("shippingAvailable", filters.shippingAvailable.toString());
+      }
+
+      if (filters.localPickupOnly !== undefined) {
+        params.append("localPickupOnly", filters.localPickupOnly.toString());
       }
 
       const response = await fetch(`/api/unified-search?${params.toString()}`);
@@ -424,6 +510,72 @@ export default function MarketplacePage() {
                       {filters.rating}+ stars
                       <button
                         onClick={() => setFilters({ ...filters, rating: undefined })}
+                        className="ml-2"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filters.instantBooking && (
+                    <Badge variant="secondary">
+                      Instant Booking
+                      <button
+                        onClick={() => setFilters({ ...filters, instantBooking: undefined })}
+                        className="ml-2"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filters.providerVerified && (
+                    <Badge variant="secondary">
+                      Verified Providers
+                      <button
+                        onClick={() => setFilters({ ...filters, providerVerified: undefined })}
+                        className="ml-2"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filters.availability && (
+                    <Badge variant="secondary">
+                      {filters.availability === "available" ? "Available Now" : filters.availability}
+                      <button
+                        onClick={() => setFilters({ ...filters, availability: undefined })}
+                        className="ml-2"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filters.condition && (
+                    <Badge variant="secondary">
+                      Condition: {filters.condition.replace("_", " ")}
+                      <button
+                        onClick={() => setFilters({ ...filters, condition: undefined })}
+                        className="ml-2"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filters.amenities && filters.amenities.length > 0 && (
+                    <Badge variant="secondary">
+                      {filters.amenities.length} amenities
+                      <button
+                        onClick={() => setFilters({ ...filters, amenities: undefined })}
+                        className="ml-2"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filters.location && (
+                    <Badge variant="secondary">
+                      Within {filters.location.radius} miles
+                      <button
+                        onClick={() => setFilters({ ...filters, location: undefined })}
                         className="ml-2"
                       >
                         <X className="h-3 w-3" />

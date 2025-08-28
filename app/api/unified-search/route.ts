@@ -71,12 +71,79 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const { page, pageSize, offset } = getPaginationParams(searchParams);
     
-    // Parse filters
-    const filters = unifiedSearchSchema.parse({
-      ...Object.fromEntries(searchParams.entries()),
+    // Build filter object from URL params
+    const filterData: any = {
+      query: searchParams.get("q") || searchParams.get("query"),
       verticals: searchParams.getAll("verticals[]"),
-      amenities: searchParams.getAll("amenities[]"),
-    });
+      category: searchParams.get("category"),
+      subcategory: searchParams.get("subcategory"),
+      minPrice: searchParams.get("minPrice"),
+      maxPrice: searchParams.get("maxPrice"),
+      sortBy: searchParams.get("sortBy"),
+      page: searchParams.get("page"),
+      pageSize: searchParams.get("pageSize"),
+    };
+
+    // Add location filter if present
+    if (searchParams.has("lat") && searchParams.has("lng")) {
+      filterData.location = {
+        lat: searchParams.get("lat"),
+        lng: searchParams.get("lng"),
+        radius: searchParams.get("radius") || 10,
+      };
+    }
+
+    // Add service-specific filters
+    if (searchParams.has("availability") || searchParams.has("instantBooking") || 
+        searchParams.has("providerVerified") || searchParams.has("minRating")) {
+      filterData.serviceFilters = {
+        availability: searchParams.get("availability"),
+        instantBooking: searchParams.get("instantBooking"),
+        providerVerified: searchParams.get("providerVerified"),
+        minRating: searchParams.get("minRating"),
+      };
+    }
+
+    // Add event-specific filters
+    if (searchParams.has("startDate") || searchParams.has("endDate") || 
+        searchParams.has("isOnline") || searchParams.has("hasSpots")) {
+      filterData.eventFilters = {
+        startDate: searchParams.get("startDate"),
+        endDate: searchParams.get("endDate"),
+        isOnline: searchParams.get("isOnline"),
+        hasSpots: searchParams.get("hasSpots"),
+      };
+    }
+
+    // Add space-specific filters
+    if (searchParams.has("minCapacity") || searchParams.has("maxCapacity") ||
+        searchParams.has("minSize") || searchParams.has("maxSize") || 
+        searchParams.has("priceUnit") || searchParams.getAll("amenities[]").length > 0) {
+      filterData.spaceFilters = {
+        minCapacity: searchParams.get("minCapacity"),
+        maxCapacity: searchParams.get("maxCapacity"),
+        minSize: searchParams.get("minSize"),
+        maxSize: searchParams.get("maxSize"),
+        priceUnit: searchParams.get("priceUnit"),
+        amenities: searchParams.getAll("amenities[]"),
+      };
+    }
+
+    // Add thing-specific filters
+    if (searchParams.has("condition") || searchParams.has("brand") ||
+        searchParams.has("negotiable") || searchParams.has("shippingAvailable") ||
+        searchParams.has("localPickupOnly")) {
+      filterData.thingFilters = {
+        condition: searchParams.get("condition"),
+        brand: searchParams.get("brand"),
+        negotiable: searchParams.get("negotiable"),
+        shippingAvailable: searchParams.get("shippingAvailable"),
+        localPickupOnly: searchParams.get("localPickupOnly"),
+      };
+    }
+
+    // Parse and validate filters
+    const filters = unifiedSearchSchema.parse(filterData);
     
     // Determine which verticals to search
     const verticalsToSearch = filters.verticals || ["services", "events", "spaces", "things"];
@@ -137,6 +204,15 @@ export async function GET(req: NextRequest) {
       
       if (filters.serviceFilters?.instantBooking !== undefined) {
         serviceConditions.push(eq(servicesTable.requiresApproval, !filters.serviceFilters.instantBooking));
+      }
+      
+      // Add provider-level filters
+      if (filters.serviceFilters?.providerVerified !== undefined) {
+        serviceConditions.push(eq(providersTable.isVerified, filters.serviceFilters.providerVerified));
+      }
+      
+      if (filters.serviceFilters?.minRating !== undefined) {
+        serviceConditions.push(gte(providersTable.averageRating, filters.serviceFilters.minRating));
       }
       
       const servicesQuery = db

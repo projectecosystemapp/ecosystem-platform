@@ -3,7 +3,7 @@ import { checkSpaceAvailability, blockSpaceAvailability } from "@/db/queries/spa
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedQuery, getValidatedBody } from "@/lib/security/api-handler";
-import { db } from "@/db";
+import { db } from "@/db/db";
 import { providersTable, spacesTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 

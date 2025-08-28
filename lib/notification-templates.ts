@@ -6,53 +6,6 @@
  */
 
 export const notificationTemplates = [
-  // Subscription Notifications
-  {
-    code: 'subscription_confirmed',
-    name: 'Subscription Confirmed',
-    type: 'subscription_confirmed',
-    channel: 'email',
-    subjectTemplate: 'Subscription Confirmed: {{planName}}',
-    titleTemplate: 'Welcome to {{planName}}!',
-    bodyTemplate: 'Hi {{customerName}}, your subscription to {{planName}} with {{providerName}} has been confirmed. Your subscription will renew on {{renewalDate}}.',
-    variables: [
-      { name: 'customerName', type: 'string', required: true },
-      { name: 'planName', type: 'string', required: true },
-      { name: 'providerName', type: 'string', required: true },
-      { name: 'renewalDate', type: 'string', required: true },
-    ],
-  },
-  {
-    code: 'subscription_renewed',
-    name: 'Subscription Renewed',
-    type: 'subscription_renewed',
-    channel: 'email',
-    subjectTemplate: 'Subscription Renewed: {{planName}}',
-    titleTemplate: 'Your Subscription Has Been Renewed',
-    bodyTemplate: 'Hi {{customerName}}, your subscription to {{planName}} has been successfully renewed. Your next renewal date is {{nextRenewalDate}}. Amount charged: ${{amount}}.',
-    variables: [
-      { name: 'customerName', type: 'string', required: true },
-      { name: 'planName', type: 'string', required: true },
-      { name: 'nextRenewalDate', type: 'string', required: true },
-      { name: 'amount', type: 'string', required: true },
-    ],
-  },
-  {
-    code: 'subscription_expiring',
-    name: 'Subscription Expiring Soon',
-    type: 'subscription_expiring',
-    channel: 'email',
-    subjectTemplate: 'Your Subscription is Expiring Soon',
-    titleTemplate: 'Subscription Expiring in {{daysRemaining}} Days',
-    bodyTemplate: 'Hi {{customerName}}, your subscription to {{planName}} will expire on {{expiryDate}}. Renew now to continue enjoying uninterrupted service.',
-    variables: [
-      { name: 'customerName', type: 'string', required: true },
-      { name: 'planName', type: 'string', required: true },
-      { name: 'daysRemaining', type: 'number', required: true },
-      { name: 'expiryDate', type: 'string', required: true },
-    ],
-  },
-
   // Payment Notifications
   {
     code: 'payment_receipt',

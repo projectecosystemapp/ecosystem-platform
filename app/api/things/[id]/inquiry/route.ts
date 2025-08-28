@@ -3,8 +3,8 @@ import { getThingById, createInquiry } from "@/db/queries/things-queries";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody } from "@/lib/security/api-handler";
-import { sendEmail } from "@/lib/email";
-import { db } from "@/db";
+import { sendEmail } from "@/lib/sendgrid/email-service";
+import { db } from "@/db/db";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq } from "drizzle-orm";
 

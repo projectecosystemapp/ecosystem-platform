@@ -42,7 +42,6 @@ const isProtectedRoute = createRouteMatcher([
 const isPublicApiRoute = createRouteMatcher([
   "/api/stripe/webhooks(.*)",
   "/api/stripe/connect/webhooks(.*)",
-  "/api/webhooks/subscriptions(.*)",
   "/api/providers/search",
   "/api/providers/[slug]",
   "/api/health",

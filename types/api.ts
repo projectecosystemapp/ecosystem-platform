@@ -210,29 +210,6 @@ export interface PaymentSummary {
 }
 
 // ============================================================================
-// Subscription API Types
-// ============================================================================
-
-export const createSubscriptionSchema = z.object({
-  planId: z.string(),
-  paymentMethodId: z.string(),
-  couponCode: z.string().optional(),
-});
-
-export type CreateSubscriptionRequest = z.infer<typeof createSubscriptionSchema>;
-export type CreateSubscriptionResponse = ApiResponse<SubscriptionSummary>;
-
-export interface SubscriptionSummary {
-  readonly id: string;
-  readonly planId: string;
-  readonly status: string;
-  readonly currentPeriodStart: Date;
-  readonly currentPeriodEnd: Date;
-  readonly cancelAtPeriodEnd: boolean;
-  readonly price: Money;
-}
-
-// ============================================================================
 // Webhook Types
 // ============================================================================
 

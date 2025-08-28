@@ -154,13 +154,7 @@ export async function checkPaymentFailedAction(): Promise<{ paymentFailed: boole
  */
 export async function getUserPlanInfoAction(): Promise<ActionResult<{
   membership: string;
-  planDuration: string | null;
   status: string | null;
-  usageCredits: number | null;
-  usedCredits: number | null;
-  billingCycleStart: Date | null;
-  billingCycleEnd: Date | null;
-  nextCreditRenewal: Date | null;
 } | null>> {
   try {
     const { userId } = await auth();

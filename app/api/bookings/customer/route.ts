@@ -2,8 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
-import { bookingsTable, providersTable } from "@/db/schema";
-import { profilesTable } from "@/db/schema";
+import { bookingsTable, providersTable, profilesTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { generateConfirmationCode } from "@/lib/utils";
 import { calculateFees } from "@/lib/payments/fee-calculator";
@@ -39,23 +38,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get or create customer record
-    let [customer] = await db
+    // Get customer profile
+    const [customer] = await db
       .select()
-      .from(customersTable)
-      .where(eq(customersTable.userId, userId))
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
       .limit(1);
 
     if (!customer) {
-      // Create customer record if doesn't exist
-      [customer] = await db
-        .insert(customersTable)
-        .values({
-          userId,
-          email: "", // Will be updated from Clerk
-          createdAt: new Date(),
-        })
-        .returning();
+      return NextResponse.json(
+        { error: "Customer profile not found" },
+        { status: 404 }
+      );
     }
 
     // Get provider details
@@ -63,8 +57,6 @@ export async function POST(req: NextRequest) {
       .select({
         id: providersTable.id,
         displayName: providersTable.displayName,
-        email: providersTable.email,
-        commissionRate: providersTable.commissionRate,
         currency: providersTable.currency,
       })
       .from(providersTable)
@@ -82,8 +74,7 @@ export async function POST(req: NextRequest) {
     const baseAmountCents = Math.round(servicePrice * 100);
     const fees = calculateFees({
       baseAmountCents,
-      isGuest: false, // Authenticated customer
-      providerCommissionRate: provider.commissionRate ? parseFloat(provider.commissionRate) : undefined
+      isGuest: false // Authenticated customer
     });
 
     // Create booking
@@ -92,7 +83,7 @@ export async function POST(req: NextRequest) {
     const [booking] = await db
       .insert(bookingsTable)
       .values({
-        customerId: customer.id,
+        customerId: userId,
         providerId: provider.id,
         serviceName,
         serviceDescription: serviceName, // Use service name as description if not provided
@@ -100,7 +91,7 @@ export async function POST(req: NextRequest) {
         bookingDate: new Date(bookingDate),
         startTime,
         endTime,
-        totalAmount: (fees.totalAmountCents / 100).toFixed(2),
+        totalAmount: (fees.customerTotalCents / 100).toFixed(2),
         platformFee: (fees.platformFeeCents / 100).toFixed(2),
         providerPayout: (fees.providerPayoutCents / 100).toFixed(2),
         guestSurcharge: (fees.guestSurchargeCents / 100).toFixed(2), // Will be 0 for authenticated

@@ -1,24 +1,17 @@
 // @ts-nocheck
-import { manageSubscriptionStatusChange, updateStripeCustomer } from "@/actions/stripe-actions";
 import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
 import { db } from "@/db/db";
 import { bookingsTable, transactionsTable, providersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { processWebhookWithIdempotency } from "@/lib/webhook-idempotency";
 import { logApiStart, logApiSuccess, logApiError, logger } from "@/lib/logger";
 import { sendBookingConfirmation, sendProviderBookingNotification, sendCancellationNotification } from "@/lib/twilio/sms-service";
-import { sendBookingConfirmationEmail, sendProviderBookingNotificationEmail } from "@/lib/sendgrid/email-service";
+import { emailService } from "@/lib/services/email-service";
 
 const relevantEvents = new Set([
-  "checkout.session.completed", 
-  "customer.subscription.updated", 
-  "customer.subscription.deleted",
-  "invoice.payment_succeeded",
-  "invoice.payment_failed",
   // Booking-related events
   "payment_intent.succeeded",
   "payment_intent.payment_failed",
@@ -28,9 +21,6 @@ const relevantEvents = new Set([
   "transfer.paid",
   "transfer.failed"
 ]);
-
-// Default usage credits for Pro plan
-const DEFAULT_USAGE_CREDITS = 250;
 
 /**
  * POST /api/stripe/webhooks
@@ -46,7 +36,6 @@ export async function POST(req: NextRequest) {
   try {
     if (!sig || !webhookSecret) {
       // Log to security monitoring as per SECURITY-AUDIT.md
-      // await logSecurityEvent({ type: 'WEBHOOK_SIGNATURE_MISSING', ip: req.headers.get('x-forwarded-for'), timestamp: new Date() });
       logger.error('Webhook signature validation failed - potential attack', {
         endpoint: '/api/stripe/webhooks',
         reason: 'missing_signature_or_secret'
@@ -60,8 +49,6 @@ export async function POST(req: NextRequest) {
       endpoint: '/api/stripe/webhooks',
       reason: 'invalid_signature'
     }, err);
-    // Log to security monitoring as per SECURITY-AUDIT.md
-    // await logSecurityEvent({ type: 'WEBHOOK_SIGNATURE_INVALID', ip: req.headers.get('x-forwarded-for'), timestamp: new Date(), details: err.message });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -77,23 +64,6 @@ export async function POST(req: NextRequest) {
   // Process the webhook with idempotency guarantees
   const result = await processWebhookWithIdempotency(event, async (event, tx) => {
     switch (event.type) {
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted":
-        await handleSubscriptionChange(event, tx);
-        break;
-
-      case "checkout.session.completed":
-        await handleCheckoutSession(event, tx);
-        break;
-        
-      case "invoice.payment_succeeded":
-        await handlePaymentSuccess(event, tx);
-        break;
-        
-      case "invoice.payment_failed":
-        await handlePaymentFailed(event, tx);
-        break;
-
       // Booking payment events
       case "payment_intent.succeeded":
         await handleBookingPaymentSuccess(event, tx);
@@ -142,96 +112,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-async function handleSubscriptionChange(event: Stripe.Event, tx?: any) {
-  const subscription = event.data.object as Stripe.Subscription;
-  const productId = subscription.items.data[0].price.product as string;
-  await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId);
-}
-
-async function handleCheckoutSession(event: Stripe.Event, tx?: any) {
-  const checkoutSession = event.data.object as Stripe.Checkout.Session;
-  if (checkoutSession.mode === "subscription") {
-    const subscriptionId = checkoutSession.subscription as string;
-    await updateStripeCustomer(checkoutSession.client_reference_id as string, subscriptionId, checkoutSession.customer as string);
-
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
-      expand: ["default_payment_method"]
-    }) as any; // Type assertion needed due to Stripe SDK type mismatch
-
-    const productId = subscription.items.data[0].price.product as string;
-    await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId);
-    
-    // Reset usage credits on new subscription
-    if (checkoutSession.client_reference_id) {
-      try {
-        const billingCycleStart = new Date(subscription.current_period_start * 1000);
-        const billingCycleEnd = new Date(subscription.current_period_end * 1000);
-        
-        await updateProfile(checkoutSession.client_reference_id, {
-          usageCredits: DEFAULT_USAGE_CREDITS,
-          usedCredits: 0,
-          status: "active",
-          billingCycleStart,
-          billingCycleEnd
-        });
-        
-        console.log(`Reset usage credits to ${DEFAULT_USAGE_CREDITS} for user ${checkoutSession.client_reference_id}`);
-      } catch (error) {
-        console.error(`Error updating usage credits: ${error}`);
-      }
-    }
-  }
-}
-
-async function handlePaymentSuccess(event: Stripe.Event, tx?: any) {
-  const invoice = event.data.object as Stripe.Invoice;
-  const customerId = invoice.customer as string;
-  
-  const subscriptionId = (invoice as any).subscription as string | null;
-  if (subscriptionId) {
-    try {
-      // Get the subscription to determine billing cycle dates
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any; // Type assertion needed due to Stripe SDK type mismatch
-      
-      const billingCycleStart = new Date(subscription.current_period_start * 1000);
-      const billingCycleEnd = new Date(subscription.current_period_end * 1000);
-      
-      // Update profile directly by Stripe customer ID
-      await updateProfileByStripeCustomerId(customerId, {
-        usageCredits: DEFAULT_USAGE_CREDITS,
-        usedCredits: 0,
-        status: "active",
-        billingCycleStart,
-        billingCycleEnd
-      });
-      
-      console.log(`Reset usage credits to ${DEFAULT_USAGE_CREDITS} for Stripe customer ${customerId}`);
-    } catch (error) {
-      console.error(`Error processing payment success: ${error}`);
-    }
-  }
-}
-
-async function handlePaymentFailed(event: Stripe.Event, tx?: any) {
-  const invoice = event.data.object as Stripe.Invoice;
-  const customerId = invoice.customer as string;
-  
-  try {
-    // Update profile directly by Stripe customer ID
-    const updatedProfile = await updateProfileByStripeCustomerId(customerId, {
-      status: "payment_failed"
-    });
-    
-    if (updatedProfile) {
-      console.log(`Marked payment as failed for user ${updatedProfile.userId}`);
-    } else {
-      console.error(`No profile found for Stripe customer: ${customerId}`);
-    }
-  } catch (error) {
-    console.error(`Error processing payment failure: ${error}`);
-  }
-}
-
 // Booking-related webhook handlers
 
 /**
@@ -249,125 +129,120 @@ async function handleBookingPaymentSuccess(event: Stripe.Event, tx?: any) {
   const database = tx || db;
   
   try {
-    // Update booking status to confirmed
-    const [updatedBooking] = await database
+    logApiStart(`stripe.webhooks.payment_intent.succeeded`, { bookingId });
+
+    // Update booking status
+    const [booking] = await database
       .update(bookingsTable)
       .set({
-        status: "confirmed",
-        updatedAt: new Date()
+        status: 'PAYMENT_SUCCEEDED',
+        paymentIntentId: paymentIntent.id,
+        updatedAt: new Date(),
       })
       .where(eq(bookingsTable.id, bookingId))
       .returning();
 
-    if (!updatedBooking) {
-      console.error(`Booking not found: ${bookingId}`);
+    if (!booking) {
+      logger.error('Booking not found for successful payment', { bookingId, paymentIntentId: paymentIntent.id });
       return;
     }
 
-    // Update transaction status
-    await database
-      .update(transactionsTable)
-      .set({
-        status: "completed",
-        stripeChargeId: paymentIntent.latest_charge as string,
-        processedAt: new Date()
-      })
-      .where(eq(transactionsTable.bookingId, bookingId));
+    // Create transaction record
+    await database.insert(transactionsTable).values({
+      bookingId,
+      stripePaymentIntentId: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: 'succeeded',
+      metadata: paymentIntent.metadata || {},
+      createdAt: new Date(),
+    });
 
-    console.log(`Booking payment confirmed: ${bookingId}`);
-
-    // Get provider details for notifications
-    const provider = await database
+    // Get provider for notifications
+    const [provider] = await database
       .select()
       .from(providersTable)
-      .where(eq(providersTable.id, updatedBooking.providerId))
-      .limit(1)
-      .then(res => res[0]);
+      .where(eq(providersTable.id, booking.providerId))
+      .limit(1);
 
-    // Send SMS notifications if phone numbers are available
-    try {
-      // Send customer confirmation SMS
-      if (updatedBooking.customerPhone) {
-        await sendBookingConfirmation({
-          customerPhone: updatedBooking.customerPhone,
-          customerName: updatedBooking.customerName || 'Valued Customer',
-          providerName: provider?.displayName || 'Service Provider',
-          serviceName: updatedBooking.serviceType || 'Service',
-          serviceDate: updatedBooking.serviceDate || new Date(),
-          serviceTime: updatedBooking.serviceTime || 'TBD',
-          totalAmount: updatedBooking.totalAmount || 0,
-          bookingId: updatedBooking.id,
-          location: updatedBooking.serviceLocation || undefined
-        });
-      }
-
-      // Send provider notification SMS
-      if (provider?.phoneNumber) {
-        await sendProviderBookingNotification({
-          providerPhone: provider.phoneNumber,
-          customerName: updatedBooking.customerName || 'Customer',
-          serviceName: updatedBooking.serviceType || 'Service',
-          serviceDate: updatedBooking.serviceDate || new Date(),
-          serviceTime: updatedBooking.serviceTime || 'TBD',
-          bookingId: updatedBooking.id,
-          amount: updatedBooking.providerAmount || updatedBooking.totalAmount || 0
-        });
-      }
-    } catch (smsError) {
-      // Don't fail the webhook if SMS fails
-      console.error('Failed to send SMS notifications:', smsError);
+    // Send confirmation notifications
+    if (booking.customerPhone) {
+      await sendBookingConfirmation({
+        to: booking.customerPhone,
+        customerName: booking.customerName,
+        serviceName: booking.serviceName,
+        bookingDate: booking.bookingDate,
+        bookingTime: booking.bookingTime,
+        amount: (paymentIntent.amount / 100).toFixed(2),
+      });
     }
 
-    // Send email notifications
-    try {
-      // Send customer confirmation email
-      if (updatedBooking.customerEmail) {
-        await sendBookingConfirmationEmail({
-          customerEmail: updatedBooking.customerEmail,
-          customerName: updatedBooking.customerName || 'Valued Customer',
-          providerName: provider?.displayName || 'Service Provider',
-          providerEmail: provider?.email,
-          serviceName: updatedBooking.serviceType || 'Service',
-          serviceDate: updatedBooking.serviceDate || new Date(),
-          serviceTime: updatedBooking.serviceTime || 'TBD',
-          totalAmount: updatedBooking.totalAmount || 0,
-          bookingId: updatedBooking.id,
-          location: updatedBooking.serviceLocation || undefined,
-          notes: updatedBooking.customerNotes || undefined,
-          providerPhone: provider?.phoneNumber || undefined
-        });
-      }
-
-      // Send provider notification email
-      if (provider?.email) {
-        await sendProviderBookingNotificationEmail({
-          customerEmail: updatedBooking.customerEmail || '',
-          customerName: updatedBooking.customerName || 'Customer',
-          providerName: provider.displayName,
-          providerEmail: provider.email,
-          serviceName: updatedBooking.serviceType || 'Service',
-          serviceDate: updatedBooking.serviceDate || new Date(),
-          serviceTime: updatedBooking.serviceTime || 'TBD',
-          totalAmount: updatedBooking.totalAmount || 0,
-          bookingId: updatedBooking.id,
-          location: updatedBooking.serviceLocation || undefined,
-          notes: updatedBooking.customerNotes || undefined
-        });
-      }
-    } catch (emailError) {
-      // Don't fail the webhook if email fails
-      console.error('Failed to send email notifications:', emailError);
+    if (booking.customerEmail) {
+      await emailService.sendBookingConfirmation({
+        customerName: booking.customerName,
+        customerEmail: booking.customerEmail,
+        providerName: provider?.businessName || 'Provider',
+        serviceName: booking.serviceName,
+        bookingDate: booking.bookingDate,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        totalAmount: paymentIntent.amount / 100,
+        bookingId: booking.id,
+        providerEmail: provider?.email,
+        location: booking.location,
+      });
     }
 
-    // TODO: Create calendar events
+    // Send payment receipt
+    if (booking.customerEmail) {
+      await emailService.sendPaymentReceipt({
+        customerName: booking.customerName,
+        customerEmail: booking.customerEmail,
+        amount: paymentIntent.amount / 100,
+        serviceName: booking.serviceName,
+        providerName: provider?.businessName || 'Provider',
+        paymentDate: new Date(),
+        paymentIntentId: paymentIntent.id,
+        bookingId: booking.id,
+      });
+    }
 
+    // Notify provider
+    if (provider?.phone) {
+      await sendProviderBookingNotification({
+        to: provider.phone,
+        customerName: booking.customerName,
+        serviceName: booking.serviceName,
+        bookingDate: booking.bookingDate,
+        bookingTime: booking.bookingTime,
+        amount: ((paymentIntent.amount * 0.9) / 100).toFixed(2), // Provider gets 90%
+      });
+    }
+
+    if (provider?.email) {
+      await emailService.sendProviderBookingNotification({
+        providerName: provider.businessName || 'Provider',
+        providerEmail: provider.email,
+        customerName: booking.customerName,
+        serviceName: booking.serviceName,
+        bookingDate: booking.bookingDate,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        bookingId: booking.id,
+        customerEmail: booking.customerEmail,
+        customerNotes: booking.customerNotes,
+      });
+    }
+
+    logApiSuccess(`stripe.webhooks.payment_intent.succeeded`, { bookingId });
   } catch (error) {
-    console.error(`Error handling booking payment success for ${bookingId}:`, error);
+    logApiError(`stripe.webhooks.payment_intent.succeeded`, error, { bookingId });
+    throw error;
   }
 }
 
 /**
- * Handle booking payment failure
+ * Handle failed booking payment
  */
 async function handleBookingPaymentFailure(event: Stripe.Event, tx?: any) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
@@ -380,61 +255,39 @@ async function handleBookingPaymentFailure(event: Stripe.Event, tx?: any) {
   const database = tx || db;
 
   try {
-    // Update booking status to cancelled due to payment failure
+    logApiStart(`stripe.webhooks.payment_intent.failed`, { bookingId });
+
+    // Update booking status
     await database
       .update(bookingsTable)
       .set({
-        status: "cancelled",
-        cancellationReason: "payment_failed",
-        cancelledAt: new Date(),
-        updatedAt: new Date()
+        status: 'PAYMENT_FAILED',
+        paymentIntentId: paymentIntent.id,
+        updatedAt: new Date(),
       })
       .where(eq(bookingsTable.id, bookingId));
 
-    // Update transaction status
-    await database
-      .update(transactionsTable)
-      .set({
-        status: "failed",
-        processedAt: new Date()
-      })
-      .where(eq(transactionsTable.bookingId, bookingId));
+    // Create transaction record
+    await database.insert(transactionsTable).values({
+      bookingId,
+      stripePaymentIntentId: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: 'failed',
+      failureReason: paymentIntent.last_payment_error?.message || 'Unknown error',
+      metadata: paymentIntent.metadata || {},
+      createdAt: new Date(),
+    });
 
-    console.log(`Booking payment failed: ${bookingId}`);
-
-    // Send SMS notification to customer about payment failure
-    try {
-      const booking = await database
-        .select()
-        .from(bookingsTable)
-        .where(eq(bookingsTable.id, bookingId))
-        .limit(1)
-        .then(res => res[0]);
-
-      if (booking?.customerPhone) {
-        await sendCancellationNotification(
-          booking.customerPhone,
-          false, // isProvider
-          booking.serviceType || 'Service',
-          booking.serviceDate || new Date(),
-          booking.id,
-          undefined // no refund on payment failure
-        );
-      }
-    } catch (smsError) {
-      console.error('Failed to send payment failure SMS:', smsError);
-    }
-
-    // TODO: Send payment failure email to customer
-    // TODO: Release time slot for rebooking
-
+    logApiSuccess(`stripe.webhooks.payment_intent.failed`, { bookingId });
   } catch (error) {
-    console.error(`Error handling booking payment failure for ${bookingId}:`, error);
+    logApiError(`stripe.webhooks.payment_intent.failed`, error, { bookingId });
+    throw error;
   }
 }
 
 /**
- * Handle booking payment cancellation
+ * Handle canceled booking payment
  */
 async function handleBookingPaymentCancellation(event: Stripe.Event, tx?: any) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
@@ -447,78 +300,103 @@ async function handleBookingPaymentCancellation(event: Stripe.Event, tx?: any) {
   const database = tx || db;
 
   try {
-    // Update booking status to cancelled
-    await database
+    logApiStart(`stripe.webhooks.payment_intent.canceled`, { bookingId });
+
+    // Update booking status
+    const [booking] = await database
       .update(bookingsTable)
       .set({
-        status: "cancelled",
-        cancellationReason: "payment_cancelled",
-        cancelledAt: new Date(),
-        updatedAt: new Date()
+        status: 'CANCELLED',
+        paymentIntentId: paymentIntent.id,
+        updatedAt: new Date(),
       })
-      .where(eq(bookingsTable.id, bookingId));
+      .where(eq(bookingsTable.id, bookingId))
+      .returning();
 
-    // Update transaction status
-    await database
-      .update(transactionsTable)
-      .set({
-        status: "failed",
-        processedAt: new Date()
-      })
-      .where(eq(transactionsTable.bookingId, bookingId));
+    // Create transaction record
+    await database.insert(transactionsTable).values({
+      bookingId,
+      stripePaymentIntentId: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: 'canceled',
+      metadata: paymentIntent.metadata || {},
+      createdAt: new Date(),
+    });
 
-    console.log(`Booking payment cancelled: ${bookingId}`);
+    // Send cancellation notifications
+    if (booking?.customerPhone) {
+      await sendCancellationNotification({
+        to: booking.customerPhone,
+        customerName: booking.customerName,
+        serviceName: booking.serviceName,
+        bookingDate: booking.bookingDate,
+      });
+    }
 
+    if (booking?.customerEmail && provider?.businessName) {
+      await emailService.sendBookingCancellation(
+        booking.customerEmail,
+        booking.customerName,
+        provider.businessName,
+        booking.serviceName,
+        booking.bookingDate
+      );
+    }
+
+    logApiSuccess(`stripe.webhooks.payment_intent.canceled`, { bookingId });
   } catch (error) {
-    console.error(`Error handling booking payment cancellation for ${bookingId}:`, error);
+    logApiError(`stripe.webhooks.payment_intent.canceled`, error, { bookingId });
+    throw error;
   }
 }
 
 /**
- * Handle charge dispute (chargeback)
+ * Handle charge dispute for a booking
  */
 async function handleBookingChargeDispute(event: Stripe.Event, tx?: any) {
   const dispute = event.data.object as Stripe.Dispute;
-  const chargeId = dispute.charge as string;
+  const paymentIntentId = dispute.payment_intent as string;
+
+  if (!paymentIntentId) {
+    return;
+  }
 
   const database = tx || db;
 
   try {
-    // Find the booking associated with this charge
-    const transaction = await database
-      .select({
-        bookingId: transactionsTable.bookingId
-      })
-      .from(transactionsTable)
-      .where(eq(transactionsTable.stripeChargeId, chargeId))
+    logApiStart(`stripe.webhooks.charge.dispute.created`, { paymentIntentId });
+
+    // Find the booking associated with this payment intent
+    const [booking] = await database
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.paymentIntentId, paymentIntentId))
       .limit(1);
 
-    if (transaction.length === 0) {
-      console.error(`No transaction found for charge ${chargeId}`);
-      return;
+    if (booking) {
+      // Mark the booking as disputed
+      await database
+        .update(bookingsTable)
+        .set({
+          status: 'DISPUTED',
+          notes: `Dispute created: ${dispute.reason || 'No reason provided'}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(bookingsTable.id, booking.id));
+
+      logger.warn('Charge dispute created for booking', {
+        bookingId: booking.id,
+        disputeId: dispute.id,
+        reason: dispute.reason,
+        amount: dispute.amount,
+      });
     }
 
-    const bookingId = transaction[0].bookingId;
-
-    // Update booking with dispute information
-    await database
-      .update(bookingsTable)
-      .set({
-        status: "cancelled",
-        cancellationReason: "disputed",
-        cancelledAt: new Date(),
-        updatedAt: new Date()
-      })
-      .where(eq(bookingsTable.id, bookingId));
-
-    console.log(`Dispute created for booking ${bookingId}`);
-
-    // TODO: Notify provider about dispute
-    // TODO: Freeze provider payouts if needed
-    // TODO: Escalate to support team
-
+    logApiSuccess(`stripe.webhooks.charge.dispute.created`, { paymentIntentId });
   } catch (error) {
-    console.error(`Error handling charge dispute for charge ${chargeId}:`, error);
+    logApiError(`stripe.webhooks.charge.dispute.created`, error, { paymentIntentId });
+    throw error;
   }
 }
 
@@ -536,23 +414,29 @@ async function handleBookingTransferCreated(event: Stripe.Event, tx?: any) {
   const database = tx || db;
 
   try {
-    // Update transaction with transfer ID
-    await database
-      .update(transactionsTable)
-      .set({
-        stripeTransferId: transfer.id
-      })
-      .where(eq(transactionsTable.bookingId, bookingId));
+    logApiStart(`stripe.webhooks.transfer.created`, { bookingId, transferId: transfer.id });
 
-    console.log(`Transfer created for booking ${bookingId}: ${transfer.id}`);
+    // Record the transfer creation
+    await database.insert(transactionsTable).values({
+      bookingId,
+      stripeTransferId: transfer.id,
+      amount: transfer.amount,
+      currency: transfer.currency,
+      status: 'pending',
+      type: 'transfer',
+      metadata: transfer.metadata || {},
+      createdAt: new Date(),
+    });
 
+    logApiSuccess(`stripe.webhooks.transfer.created`, { bookingId, transferId: transfer.id });
   } catch (error) {
-    console.error(`Error handling transfer creation for booking ${bookingId}:`, error);
+    logApiError(`stripe.webhooks.transfer.created`, error, { bookingId, transferId: transfer.id });
+    throw error;
   }
 }
 
 /**
- * Handle successful transfer (payout completed)
+ * Handle successful transfer (provider payout completed)
  */
 async function handleBookingTransferPaid(event: Stripe.Event, tx?: any) {
   const transfer = event.data.object as Stripe.Transfer;
@@ -565,26 +449,36 @@ async function handleBookingTransferPaid(event: Stripe.Event, tx?: any) {
   const database = tx || db;
 
   try {
-    // Update transaction status
+    logApiStart(`stripe.webhooks.transfer.paid`, { bookingId, transferId: transfer.id });
+
+    // Update the transfer status
     await database
       .update(transactionsTable)
       .set({
-        status: "completed",
-        processedAt: new Date()
+        status: 'succeeded',
+        updatedAt: new Date(),
       })
       .where(eq(transactionsTable.stripeTransferId, transfer.id));
 
-    console.log(`Transfer paid for booking ${bookingId}: ${transfer.id}`);
+    // Mark booking as completed if payment was successful
+    await database
+      .update(bookingsTable)
+      .set({
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(bookingsTable.id, bookingId));
 
-    // TODO: Notify provider about successful payout
-
+    logApiSuccess(`stripe.webhooks.transfer.paid`, { bookingId, transferId: transfer.id });
   } catch (error) {
-    console.error(`Error handling transfer payment for booking ${bookingId}:`, error);
+    logApiError(`stripe.webhooks.transfer.paid`, error, { bookingId, transferId: transfer.id });
+    throw error;
   }
 }
 
 /**
- * Handle failed transfer (payout failed)
+ * Handle failed transfer
  */
 async function handleBookingTransferFailed(event: Stripe.Event, tx?: any) {
   const transfer = event.data.object as Stripe.Transfer;
@@ -597,21 +491,29 @@ async function handleBookingTransferFailed(event: Stripe.Event, tx?: any) {
   const database = tx || db;
 
   try {
-    // Update transaction status
+    logApiStart(`stripe.webhooks.transfer.failed`, { bookingId, transferId: transfer.id });
+
+    // Update the transfer status
     await database
       .update(transactionsTable)
       .set({
-        status: "failed",
-        processedAt: new Date()
+        status: 'failed',
+        failureReason: 'Transfer to provider failed',
+        updatedAt: new Date(),
       })
       .where(eq(transactionsTable.stripeTransferId, transfer.id));
 
-    console.log(`Transfer failed for booking ${bookingId}: ${transfer.id}`);
+    // Log the failure for manual review
+    logger.error('Transfer to provider failed', {
+      bookingId,
+      transferId: transfer.id,
+      destination: transfer.destination,
+      amount: transfer.amount,
+    });
 
-    // TODO: Notify provider about failed payout
-    // TODO: Retry transfer or escalate to support
-
+    logApiSuccess(`stripe.webhooks.transfer.failed`, { bookingId, transferId: transfer.id });
   } catch (error) {
-    console.error(`Error handling transfer failure for booking ${bookingId}:`, error);
+    logApiError(`stripe.webhooks.transfer.failed`, error, { bookingId, transferId: transfer.id });
+    throw error;
   }
 }

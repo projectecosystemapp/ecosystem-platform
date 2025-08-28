@@ -33,16 +33,6 @@ import {
   competitorPricingTable
 } from "./schema/pricing-schema";
 import { servicesTable } from "./schema/enhanced-booking-schema";
-import {
-  subscriptionPlansTable,
-  customerSubscriptionsTable,
-  subscriptionBookingsTable,
-  subscriptionUsageTable
-} from "./schema/subscriptions-schema";
-import {
-  subscriptionUsageRecordsTable,
-  subscriptionUsageSummariesTable
-} from "./schema/subscription-usage-schema";
 
 // Define the schema properly
 const schema = { 
@@ -71,13 +61,7 @@ const schema = {
   priceAlerts: priceAlertsTable,
   surgePricingEvents: surgePricingEventsTable,
   priceHistory: priceHistoryTable,
-  competitorPricing: competitorPricingTable,
-  subscriptionPlans: subscriptionPlansTable,
-  customerSubscriptions: customerSubscriptionsTable,
-  subscriptionBookings: subscriptionBookingsTable,
-  subscriptionUsage: subscriptionUsageTable,
-  subscriptionUsageRecords: subscriptionUsageRecordsTable,
-  subscriptionUsageSummaries: subscriptionUsageSummariesTable
+  competitorPricing: competitorPricingTable
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment

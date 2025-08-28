@@ -10,7 +10,7 @@ import {
   formatCentsToDisplay,
   parseDisplayToCents,
   createFeeBreakdown,
-  DEFAULT_PLATFORM_FEE_RATE,
+  PLATFORM_FEE_RATE,
   GUEST_SURCHARGE_RATE,
   MIN_TRANSACTION_CENTS,
   MAX_TRANSACTION_CENTS
@@ -50,16 +50,16 @@ describe('Fee Calculator', () => {
       expect(result.displayAmounts.guestSurcharge).toBe('$10.00');
     });
 
-    it('should handle custom commission rates', () => {
+    it('should always use fixed 10% platform fee (constitutional mandate)', () => {
       const result = calculateFees({
         baseAmountCents: 10000, // $100
-        isGuest: false,
-        providerCommissionRate: 0.15 // 15% commission
+        isGuest: false
+        // No commission rate parameter - always 10%
       });
 
-      expect(result.platformFeeCents).toBe(1500); // 15% platform fee
-      expect(result.providerPayoutCents).toBe(8500); // 85% to provider
-      expect(result.platformFeeRate).toBe(0.15);
+      expect(result.platformFeeCents).toBe(1000); // Always 10% platform fee
+      expect(result.providerPayoutCents).toBe(9000); // Always 90% to provider
+      expect(result.platformFeeRate).toBe(0.10); // Fixed at 10%
     });
 
     it('should handle small amounts with proper rounding', () => {
@@ -108,22 +108,23 @@ describe('Fee Calculator', () => {
       })).toThrow('Maximum transaction amount');
     });
 
-    it('should clamp invalid commission rates', () => {
-      const negativeRate = calculateFees({
+    it('should enforce fixed 10% rate regardless of input variations', () => {
+      // Test that platform fee is immutable at 10%
+      const standardFees = calculateFees({
         baseAmountCents: 10000,
-        isGuest: false,
-        providerCommissionRate: -0.5
+        isGuest: false
       });
-      expect(negativeRate.platformFeeRate).toBe(0);
-      expect(negativeRate.platformFeeCents).toBe(0);
+      expect(standardFees.platformFeeRate).toBe(0.10);
+      expect(standardFees.platformFeeCents).toBe(1000);
 
-      const highRate = calculateFees({
+      // Even with guest transactions, platform fee on base remains 10%
+      const guestFees = calculateFees({
         baseAmountCents: 10000,
-        isGuest: false,
-        providerCommissionRate: 1.5
+        isGuest: true
       });
-      expect(highRate.platformFeeRate).toBe(1);
-      expect(highRate.platformFeeCents).toBe(10000);
+      expect(guestFees.platformFeeRate).toBe(0.10);
+      expect(guestFees.platformFeeCents).toBe(1000); // 10% of base
+      expect(guestFees.guestSurchargeCents).toBe(1000); // Additional 10% surcharge
     });
   });
 

@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Package, Calendar, MapPin, ShoppingBag, Search, Filter } from "lucide-react";
 import Link from "next/link";
 
-async function getProviderListings(providerId: string) {
+async function getProviderListings(providerId: string, userId: string) {
   // Get all services from provider (services are stored in the provider record)
   const [provider] = await db
     .select({
@@ -39,11 +39,11 @@ async function getProviderListings(providerId: string) {
     .where(eq(spacesTable.providerId, providerId))
     .orderBy(desc(spacesTable.createdAt));
 
-  // Get all things
+  // Get all things - note: things are associated with user profiles, not providers
   const things = await db
     .select()
     .from(thingsTable)
-    .where(eq(thingsTable.providerId, providerId))
+    .where(eq(thingsTable.sellerId, userId))  // Use sellerId and userId
     .orderBy(desc(thingsTable.createdAt));
 
   return {
@@ -51,6 +51,7 @@ async function getProviderListings(providerId: string) {
     events,
     spaces,
     things,
+    providerId,
     totals: {
       services: provider?.services?.length || 0,
       events: events.length,
@@ -77,7 +78,7 @@ export default async function ListingsPage() {
     redirect("/become-a-provider");
   }
 
-  const listings = await getProviderListings(provider.id);
+  const listings = await getProviderListings(provider.id, userId);
 
   return (
     <div className="space-y-6">
@@ -151,10 +152,38 @@ export default async function ListingsPage() {
             <CardContent>
               <ListingsTable 
                 listings={[
-                  ...listings.services.map(s => ({ ...s, type: 'service' as const, id: s.name })),
-                  ...listings.events.map(e => ({ ...e, type: 'event' as const })),
-                  ...listings.spaces.map(s => ({ ...s, type: 'space' as const })),
-                  ...listings.things.map(t => ({ ...t, type: 'thing' as const })),
+                  ...listings.services.map(s => ({ 
+                    ...s, 
+                    type: 'service' as const, 
+                    id: `service-${s.name}`,
+                    title: s.name,
+                    isActive: true,
+                    createdAt: new Date()
+                  })),
+                  ...listings.events.map(e => ({ 
+                    ...e, 
+                    type: 'event' as const,
+                    name: e.title,
+                    description: e.description || undefined,  // Convert null to undefined
+                    price: parseFloat(e.price || '0'),  // Convert string to number
+                    isActive: e.status === 'published'
+                  })),
+                  ...listings.spaces.map(s => ({ 
+                    ...s, 
+                    type: 'space' as const,
+                    title: s.name,
+                    description: s.description || undefined,  // Convert null to undefined
+                    price: parseFloat(s.hourlyRate || s.dailyRate || '0'),  // Convert to number
+                    isActive: s.isActive
+                  })),
+                  ...listings.things.map(t => ({ 
+                    ...t, 
+                    type: 'thing' as const,
+                    name: t.title,
+                    description: t.description || undefined,  // Convert null to undefined
+                    price: parseFloat(t.price || '0'),  // Convert to number
+                    isActive: t.status === 'active'  // Fix status check
+                  })),
                 ]}
                 providerId={provider.id}
               />
@@ -184,7 +213,14 @@ export default async function ListingsPage() {
                 </div>
               ) : (
                 <ListingsTable 
-                  listings={listings.services.map(s => ({ ...s, type: 'service' as const, id: s.name }))}
+                  listings={listings.services.map(s => ({ 
+                    ...s, 
+                    type: 'service' as const, 
+                    id: `service-${s.name}`,
+                    title: s.name,
+                    isActive: true,
+                    createdAt: new Date()
+                  }))}
                   providerId={provider.id}
                 />
               )}
@@ -214,7 +250,14 @@ export default async function ListingsPage() {
                 </div>
               ) : (
                 <ListingsTable 
-                  listings={listings.events.map(e => ({ ...e, type: 'event' as const }))}
+                  listings={listings.events.map(e => ({ 
+                    ...e, 
+                    type: 'event' as const,
+                    name: e.title,
+                    description: e.description || undefined,
+                    price: parseFloat(e.price || '0'),
+                    isActive: e.status === 'published'
+                  }))}
                   providerId={provider.id}
                 />
               )}
@@ -244,7 +287,14 @@ export default async function ListingsPage() {
                 </div>
               ) : (
                 <ListingsTable 
-                  listings={listings.spaces.map(s => ({ ...s, type: 'space' as const }))}
+                  listings={listings.spaces.map(s => ({ 
+                    ...s, 
+                    type: 'space' as const,
+                    title: s.name,
+                    description: s.description || undefined,
+                    price: parseFloat(s.hourlyRate || s.dailyRate || '0'),
+                    isActive: s.isActive
+                  }))}
                   providerId={provider.id}
                 />
               )}
@@ -274,7 +324,14 @@ export default async function ListingsPage() {
                 </div>
               ) : (
                 <ListingsTable 
-                  listings={listings.things.map(t => ({ ...t, type: 'thing' as const }))}
+                  listings={listings.things.map(t => ({ 
+                    ...t, 
+                    type: 'thing' as const,
+                    name: t.title,
+                    description: t.description || undefined,
+                    price: parseFloat(t.price || '0'),
+                    isActive: t.status === 'active'
+                  }))}
                   providerId={provider.id}
                 />
               )}

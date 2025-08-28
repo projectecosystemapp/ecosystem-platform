@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { VerificationBadgeGroup, useProviderVerificationBadges } from "@/components/ui/verification-badge";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/db/schema/providers-schema";
 
@@ -69,6 +70,15 @@ export function ProviderCard({
   const rating = provider.averageRating ? Number(provider.averageRating) : 0;
   const reviewCount = provider.totalReviews || 0;
 
+  const verificationBadges = useProviderVerificationBadges({
+    isVerified: provider.isVerified,
+    stripeOnboardingComplete: provider.stripeOnboardingComplete,
+    hasInsurance: provider.hasInsurance,
+    averageRating: provider.averageRating,
+    completedBookings: provider.completedBookings,
+    responseTime: provider.responseTime,
+  });
+
   if (viewMode === "list") {
     return (
       <Card 
@@ -100,16 +110,16 @@ export function ProviderCard({
                 </div>
               )}
               
-              {/* Badges */}
-              <div className="absolute top-2 left-2 flex flex-col gap-1">
-                {provider.isVerified && (
-                  <Badge className="bg-blue-500 text-white border-0">
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Verified
-                  </Badge>
-                )}
+              {/* Verification Badges */}
+              <div className="absolute top-2 left-2">
+                <VerificationBadgeGroup 
+                  verifications={verificationBadges}
+                  size="xs"
+                  maxDisplay={2}
+                  orientation="vertical"
+                />
                 {provider.instantBooking && (
-                  <Badge className="bg-green-500 text-white border-0">
+                  <Badge className="bg-green-500 text-white border-0 mt-1">
                     <Calendar className="h-3 w-3 mr-1" />
                     Instant
                   </Badge>
@@ -280,18 +290,13 @@ export function ProviderCard({
             </div>
           )}
           
-          {/* Overlay Badges */}
-          <div className="absolute top-2 left-2 flex gap-1">
-            {provider.isVerified && (
-              <Badge className="bg-blue-500 text-white border-0">
-                <CheckCircle className="h-3 w-3" />
-              </Badge>
-            )}
-            {provider.hasInsurance && (
-              <Badge className="bg-purple-500 text-white border-0">
-                <Shield className="h-3 w-3" />
-              </Badge>
-            )}
+          {/* Verification Badges */}
+          <div className="absolute top-2 left-2">
+            <VerificationBadgeGroup 
+              verifications={verificationBadges}
+              size="xs"
+              maxDisplay={2}
+            />
           </div>
 
           {/* Favorite Button */}

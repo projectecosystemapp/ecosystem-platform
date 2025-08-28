@@ -207,7 +207,7 @@ export function initSentryForAPI() {
 
   const dsn = getSentryDSN();
   
-  if (!Sentry.getCurrentHub().getClient()) {
+  if (!Sentry.getClient()) {
     Sentry.init({
       dsn,
       environment: process.env.NODE_ENV,

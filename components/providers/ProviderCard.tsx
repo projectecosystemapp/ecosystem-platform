@@ -4,10 +4,13 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Star, MapPin, Clock, DollarSign, CheckCircle2, Calendar } from "lucide-react";
+import { VerificationBadgeGroup, useProviderVerificationBadges } from "@/components/ui/verification-badge";
+import { Star, MapPin, Clock, DollarSign, Calendar, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Provider } from "@/types/api/providers";
+import { StartConversationDialog } from "@/components/messaging";
+import { useUser } from "@clerk/nextjs";
 
 interface ProviderCardProps {
   provider: Provider;
@@ -16,12 +19,22 @@ interface ProviderCardProps {
 }
 
 export function ProviderCard({ provider, onBook, className }: ProviderCardProps) {
+  const { user } = useUser();
+  
   const initials = provider.displayName
     .split(" ")
     .map(n => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const verificationBadges = useProviderVerificationBadges({
+    isVerified: provider.isVerified,
+    stripeOnboardingComplete: provider.stripeOnboardingComplete,
+    hasInsurance: provider.hasInsurance,
+    averageRating: provider.averageRating,
+    completedBookings: provider.completedBookings,
+  });
 
   return (
     <Card className={`hover:shadow-lg transition-all hover:scale-[1.02] ${className}`}>
@@ -36,17 +49,19 @@ export function ProviderCard({ provider, onBook, className }: ProviderCardProps)
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
             <div>
-              <h3 className="font-semibold text-lg flex items-center gap-2">
+              <h3 className="font-semibold text-lg">
                 {provider.displayName}
-                {provider.isVerified && (
-                  <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                )}
               </h3>
               {provider.tagline && (
-                <p className="text-sm text-muted-foreground line-clamp-1">
+                <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
                   {provider.tagline}
                 </p>
               )}
+              <VerificationBadgeGroup 
+                verifications={verificationBadges}
+                size="xs"
+                maxDisplay={3}
+              />
             </div>
           </div>
         </div>
@@ -131,21 +146,41 @@ export function ProviderCard({ provider, onBook, className }: ProviderCardProps)
         )}
       </CardContent>
 
-      <CardFooter className="pt-4 space-x-2">
-        <Button asChild className="flex-1">
-          <Link href={`/providers/${provider.slug}`}>
-            View Profile
-          </Link>
-        </Button>
-        {provider.stripeOnboardingComplete && onBook && (
-          <Button 
-            variant="outline" 
-            className="flex-1"
-            onClick={() => onBook(provider.id)}
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            Book Now
+      <CardFooter className="pt-4 flex flex-col gap-2">
+        <div className="flex space-x-2 w-full">
+          <Button asChild className="flex-1">
+            <Link href={`/providers/${provider.slug}`}>
+              View Profile
+            </Link>
           </Button>
+          {provider.stripeOnboardingComplete && onBook && (
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={() => onBook(provider.id)}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Book Now
+            </Button>
+          )}
+        </div>
+        
+        {/* Message Provider Button */}
+        {user && user.id !== provider.userId && (
+          <StartConversationDialog
+            recipientId={provider.userId}
+            recipientEmail={provider.email || provider.displayName}
+            onConversationStarted={(conversationId) => {
+              // Could redirect to messages page or show success message
+              console.log('Conversation started:', conversationId);
+            }}
+            trigger={
+              <Button variant="outline" size="sm" className="w-full">
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Message Provider
+              </Button>
+            }
+          />
         )}
       </CardFooter>
     </Card>

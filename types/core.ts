@@ -28,10 +28,6 @@ export type BookingId = Brand<string, 'BookingId'>;
 export type TransactionId = Brand<string, 'TransactionId'>;
 export type PaymentIntentId = Brand<string, 'PaymentIntentId'>;
 
-// Subscription IDs
-export type SubscriptionId = Brand<string, 'SubscriptionId'>;
-export type SubscriptionPlanId = Brand<string, 'SubscriptionPlanId'>;
-
 // Other Entity IDs
 export type CategoryId = Brand<string, 'CategoryId'>;
 export type ReviewId = Brand<string, 'ReviewId'>;
@@ -41,7 +37,6 @@ export type NotificationId = Brand<string, 'NotificationId'>;
 // Stripe IDs (for external consistency)
 export type StripeCustomerId = Brand<string, 'StripeCustomerId'>;
 export type StripeAccountId = Brand<string, 'StripeAccountId'>;
-export type StripeSubscriptionId = Brand<string, 'StripeSubscriptionId'>;
 
 // ============================================================================
 // Utility Types
@@ -106,18 +101,6 @@ export type ProviderState =
   | { status: 'BANNED'; approvedAt?: Date; suspendedAt?: Date };
 
 export type ProviderStatus = ProviderState['status'];
-
-/**
- * Subscription status
- */
-export type SubscriptionStatus = 
-  | 'active'
-  | 'canceled'
-  | 'incomplete'
-  | 'incomplete_expired'
-  | 'past_due'
-  | 'trialing'
-  | 'unpaid';
 
 // ============================================================================
 // Money & Currency Types

@@ -26,7 +26,6 @@ export interface Provider {
   services?: ProviderService[];
   portfolio?: PortfolioItem[];
   socialLinks?: SocialLinks;
-  commissionRate: number;
   stripeOnboardingComplete: boolean;
   createdAt: Date;
   updatedAt: Date;

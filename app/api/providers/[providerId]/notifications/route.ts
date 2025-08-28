@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { db } from "@/db";
+import { db } from "@/db/db";
 import { bookingsTable } from "@/db/schema/bookings-schema";
 import { notificationsTable } from "@/db/schema/notifications-schema";
 import { providersTable } from "@/db/schema/providers-schema";

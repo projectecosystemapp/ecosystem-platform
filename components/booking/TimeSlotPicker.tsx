@@ -80,12 +80,14 @@ export function TimeSlotPicker({
           providerId,
           format(selectedDate, 'yyyy-MM-dd'),
           serviceDuration || 60,
-          timezone ? { timezone } : undefined
+          { 
+            timezone,
+            minimumNoticeHours: 2
+          }
         );
 
-        if (result.success && result.data && result.data.length > 0) {
-          const dayData = result.data[0];
-          const slots: TimeSlot[] = dayData.slots.map((slot: any) => ({
+        if (result.success && result.data) {
+          const slots: TimeSlot[] = (result.data.slots || []).map((slot: any) => ({
             startTime: slot.startTime,
             endTime: slot.endTime,
             available: slot.available,

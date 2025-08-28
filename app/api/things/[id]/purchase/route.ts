@@ -3,7 +3,7 @@ import { getThingById, markThingAsSold, reserveThing } from "@/db/queries/things
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody } from "@/lib/security/api-handler";
-import { db } from "@/db";
+import { db } from "@/db/db";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { bookingsTable } from "@/db/schema/bookings-schema";
 import { paymentsTable } from "@/db/schema/payments-schema";
@@ -11,7 +11,7 @@ import { thingsTable } from "@/db/schema/things-schema";
 import { eq } from "drizzle-orm";
 import { stripe } from "@/lib/stripe";
 import { calculateFees } from "@/lib/fees";
-import { sendEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/sendgrid/email-service";
 
 /**
  * Thing Purchase API

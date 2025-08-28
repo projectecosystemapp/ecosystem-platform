@@ -51,8 +51,8 @@ export async function getProviderWithRelations(providerId: string) {
       .select({
         id: reviewsTable.id,
         rating: reviewsTable.rating,
-        comment: reviewsTable.comment,
-        customerName: sql<string>`(SELECT display_name FROM profiles WHERE user_id = ${reviewsTable.customerId})`,
+        reviewText: reviewsTable.reviewText,
+        customerName: sql<string>`(SELECT email FROM profiles WHERE user_id = ${reviewsTable.customerId})`,
         createdAt: reviewsTable.createdAt,
       })
       .from(reviewsTable)

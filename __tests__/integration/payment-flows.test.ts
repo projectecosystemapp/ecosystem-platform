@@ -121,44 +121,51 @@ describe('Fee Calculations', () => {
     });
   });
 
-  describe('Custom Commission Rates', () => {
-    it('should handle custom provider commission rates', () => {
-      const fees = calculateFees({
+  describe('Fixed Platform Fee (Constitutional Mandate)', () => {
+    it('should always apply fixed 10% platform fee regardless of any parameters', () => {
+      // Test that platform fee is always 10% - immutable per constitution
+      const standardFees = calculateFees({
         baseAmountCents: 10000,
-        isGuest: false,
-        providerCommissionRate: 0.15 // 15% commission
+        isGuest: false
       });
 
-      expect(fees.platformFeeCents).toBe(1500); // $15 platform fee
-      expect(fees.providerPayoutCents).toBe(8500); // $85 provider payout
+      expect(standardFees.platformFeeCents).toBe(1000); // Always $10 (10%)
+      expect(standardFees.providerPayoutCents).toBe(9000); // Always $90 (90%)
+      expect(standardFees.platformFeeRate).toBe(0.10); // Always 10%
     });
 
-    it('should validate commission rate boundaries', () => {
-      // Test minimum (0%)
-      const minFees = calculateFees({
-        baseAmountCents: 10000,
-        isGuest: false,
-        providerCommissionRate: 0
-      });
-      expect(minFees.platformFeeCents).toBe(0);
-      expect(minFees.providerPayoutCents).toBe(10000);
+    it('should enforce fixed 10% fee for all transaction sizes', () => {
+      // Test various amounts - platform fee should always be exactly 10%
+      const testCases = [
+        { base: 1000, expectedFee: 100, expectedPayout: 900 },   // $10 -> $1 fee
+        { base: 5000, expectedFee: 500, expectedPayout: 4500 },   // $50 -> $5 fee
+        { base: 10000, expectedFee: 1000, expectedPayout: 9000 }, // $100 -> $10 fee
+        { base: 100000, expectedFee: 10000, expectedPayout: 90000 } // $1000 -> $100 fee
+      ];
 
-      // Test maximum (100%)
-      const maxFees = calculateFees({
-        baseAmountCents: 10000,
-        isGuest: false,
-        providerCommissionRate: 1
+      testCases.forEach(({ base, expectedFee, expectedPayout }) => {
+        const fees = calculateFees({
+          baseAmountCents: base,
+          isGuest: false
+        });
+        
+        expect(fees.platformFeeCents).toBe(expectedFee);
+        expect(fees.providerPayoutCents).toBe(expectedPayout);
+        expect(fees.platformFeeRate).toBe(0.10); // Always 10%
       });
-      expect(maxFees.platformFeeCents).toBe(10000);
-      expect(maxFees.providerPayoutCents).toBe(0);
+    });
 
-      // Test out of bounds (should clamp)
-      const outOfBoundsFees = calculateFees({
+    it('should maintain fixed 10% platform fee even for guest transactions', () => {
+      // Guest surcharge is additional, but platform fee remains 10% of base
+      const guestFees = calculateFees({
         baseAmountCents: 10000,
-        isGuest: false,
-        providerCommissionRate: 1.5 // Should clamp to 1.0
+        isGuest: true
       });
-      expect(outOfBoundsFees.platformFeeCents).toBe(10000);
+
+      expect(guestFees.platformFeeCents).toBe(1000); // Still $10 (10% of base)
+      expect(guestFees.guestSurchargeCents).toBe(1000); // Additional $10 surcharge
+      expect(guestFees.platformTotalRevenueCents).toBe(2000); // Total $20 platform revenue
+      expect(guestFees.providerPayoutCents).toBe(9000); // Provider still gets 90% of base
     });
   });
 

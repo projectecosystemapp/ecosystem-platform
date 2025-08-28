@@ -10,7 +10,6 @@ import Stripe from 'stripe';
 // Re-export core Stripe types
 export type StripePaymentIntent = Stripe.PaymentIntent;
 export type StripeCustomer = Stripe.Customer;
-export type StripeSubscription = Stripe.Subscription;
 export type StripeInvoice = Stripe.Invoice;
 export type StripePaymentMethod = Stripe.PaymentMethod;
 export type StripeRefund = Stripe.Refund;
@@ -26,7 +25,6 @@ export type StripeWebhookEvent = Stripe.Event;
 // Common webhook event data types
 export type PaymentIntentWebhookData = Stripe.PaymentIntent;
 export type CustomerWebhookData = Stripe.Customer;
-export type SubscriptionWebhookData = Stripe.Subscription;
 export type InvoiceWebhookData = Stripe.Invoice;
 
 // Webhook event type mapping
@@ -42,14 +40,6 @@ export interface StripeWebhookEventMap {
   'customer.created': CustomerWebhookData;
   'customer.updated': CustomerWebhookData;
   'customer.deleted': CustomerWebhookData;
-  
-  // Subscription events
-  'customer.subscription.created': SubscriptionWebhookData;
-  'customer.subscription.updated': SubscriptionWebhookData;
-  'customer.subscription.deleted': SubscriptionWebhookData;
-  'customer.subscription.paused': SubscriptionWebhookData;
-  'customer.subscription.resumed': SubscriptionWebhookData;
-  'customer.subscription.trial_will_end': SubscriptionWebhookData;
   
   // Invoice events
   'invoice.created': InvoiceWebhookData;
@@ -121,13 +111,6 @@ export interface BookingMetadata {
   providerPayout: string;
 }
 
-export interface SubscriptionMetadata {
-  userId: string;
-  planId: string;
-  previousPlanId?: string;
-  couponCode?: string;
-}
-
 export interface RefundMetadata {
   bookingId: string;
   reason: string;
@@ -142,12 +125,6 @@ export function isPaymentIntentEvent(
   return event.type.startsWith('payment_intent.');
 }
 
-export function isSubscriptionEvent(
-  event: Stripe.Event
-): event is Stripe.Event & { data: { object: Stripe.Subscription } } {
-  return event.type.startsWith('customer.subscription.');
-}
-
 export function isInvoiceEvent(
   event: Stripe.Event
 ): event is Stripe.Event & { data: { object: Stripe.Invoice } } {
@@ -157,7 +134,7 @@ export function isInvoiceEvent(
 export function isCustomerEvent(
   event: Stripe.Event
 ): event is Stripe.Event & { data: { object: Stripe.Customer } } {
-  return event.type.startsWith('customer.') && !event.type.startsWith('customer.subscription.');
+  return event.type.startsWith('customer.');
 }
 
 // Utility functions for Stripe amounts

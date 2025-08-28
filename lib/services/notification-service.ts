@@ -347,9 +347,6 @@ export class NotificationService {
 
     // Check category-level preference
     const categoryMap: Record<string, keyof NotificationPreferences> = {
-      subscription_confirmed: 'subscriptionNotifications',
-      subscription_renewed: 'subscriptionNotifications',
-      subscription_cancelled: 'subscriptionNotifications',
       payment_received: 'paymentNotifications',
       payment_failed: 'paymentNotifications',
       points_earned: 'loyaltyNotifications',

@@ -6,6 +6,8 @@
 import { db } from "@/db/db";
 import { providersTable, providerAvailabilityTable } from "@/db/schema/providers-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
+import { reviewsTable } from "@/db/schema/reviews-schema";
+import { bookingsTable } from "@/db/schema/bookings-schema";
 import { faker } from "@faker-js/faker";
 
 const services = {
@@ -142,8 +144,6 @@ async function seedData() {
         userId,
         email,
         membership: "free",
-        usageCredits: 5,
-        usedCredits: 0,
         status: "active",
       });
       
@@ -206,10 +206,88 @@ async function seedData() {
       }
       
       console.log(`  📅 Added availability for ${displayName}`);
+      
+      // Add sample reviews for each provider
+      const numReviews = Math.min(template.totalReviews, 10); // Add up to 10 sample reviews per provider
+      
+      for (let r = 0; r < numReviews; r++) {
+        // Create a customer user for this review
+        const customerId = `customer_${provider.id}_${r}_${Date.now()}`;
+        await db.insert(profilesTable).values({
+          userId: customerId,
+          email: faker.internet.email(),
+          membership: "free",
+          status: "active",
+        });
+        
+        // Create a completed booking for this review
+        const bookingId = `booking_${provider.id}_${r}_${Date.now()}`;
+        const bookingDate = faker.date.past({ years: 1 });
+        
+        await db.insert(bookingsTable).values({
+          id: bookingId,
+          providerId: provider.id,
+          customerId: customerId,
+          serviceType: template.serviceType,
+          serviceName: services[serviceType][0].name,
+          startTime: bookingDate.toISOString(),
+          endTime: new Date(bookingDate.getTime() + 60 * 60 * 1000).toISOString(),
+          status: "completed",
+          totalAmount: services[serviceType][0].price.toString(),
+          providerAmount: (services[serviceType][0].price * 0.9).toString(),
+          platformFee: (services[serviceType][0].price * 0.1).toString(),
+          paymentStatus: "captured",
+          createdAt: bookingDate,
+          updatedAt: bookingDate,
+        });
+        
+        // Create the review
+        const ratings = [5, 5, 5, 5, 4, 4, 4, 3]; // Weighted towards positive reviews
+        const rating = ratings[Math.floor(Math.random() * ratings.length)];
+        
+        const reviewTexts = {
+          5: [
+            "Absolutely amazing service! Exceeded all my expectations.",
+            "Professional, punctual, and delivered outstanding results. Highly recommend!",
+            "Best experience I've had. Will definitely book again!",
+            "Fantastic work! Very pleased with the outcome.",
+            "Couldn't be happier with the service. 10/10!",
+          ],
+          4: [
+            "Great service overall. Just a few minor areas for improvement.",
+            "Very good experience. Would recommend to others.",
+            "Professional and reliable. Happy with the results.",
+            "Good value for money. Satisfied with the service.",
+          ],
+          3: [
+            "Service was okay. Met basic expectations.",
+            "Average experience. Nothing particularly special.",
+            "Decent service but room for improvement.",
+          ],
+        };
+        
+        const reviewTextOptions = reviewTexts[rating as keyof typeof reviewTexts] || reviewTexts[5];
+        const reviewText = reviewTextOptions[Math.floor(Math.random() * reviewTextOptions.length)];
+        
+        await db.insert(reviewsTable).values({
+          bookingId: bookingId,
+          providerId: provider.id,
+          customerId: customerId,
+          rating: rating,
+          reviewText: reviewText,
+          isVerifiedBooking: true,
+          isPublished: true,
+          isFlagged: false,
+          createdAt: new Date(bookingDate.getTime() + 24 * 60 * 60 * 1000), // Review day after booking
+          updatedAt: new Date(bookingDate.getTime() + 24 * 60 * 60 * 1000),
+        });
+      }
+      
+      console.log(`  ⭐ Added ${numReviews} reviews for ${displayName}`);
     }
 
     console.log("\n🎉 Sample data seeded successfully!");
-    console.log(`Created ${profileIds.length} profiles and providers`);
+    console.log(`Created ${profileIds.length} profiles and providers with reviews`);
     
   } catch (error) {
     console.error("❌ Error seeding data:", error);

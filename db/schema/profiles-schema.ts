@@ -10,20 +10,6 @@ export const profilesTable = pgTable("profiles", {
   membership: membershipEnum("membership").notNull().default("free"),
   paymentProvider: paymentProviderEnum("payment_provider").default("stripe"),
   stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
-  // DEPRECATED: Whop fields kept for backwards compatibility, no longer used
-  whopUserId: text("whop_user_id"), // @deprecated
-  whopMembershipId: text("whop_membership_id"), // @deprecated
-  planDuration: text("plan_duration"), // "monthly" or "yearly"
-  // Billing cycle tracking
-  billingCycleStart: timestamp("billing_cycle_start"),
-  billingCycleEnd: timestamp("billing_cycle_end"),
-  // Credit renewal tracking (separate from billing cycle for yearly plans)
-  nextCreditRenewal: timestamp("next_credit_renewal"),
-  // Usage credits tracking
-  usageCredits: integer("usage_credits").default(0),
-  usedCredits: integer("used_credits").default(0),
-  // Subscription status tracking
   status: text("status").default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")

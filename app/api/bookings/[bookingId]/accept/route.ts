@@ -13,6 +13,7 @@ import { bookingsTable, providersTable } from '@/db/schema/enhanced-booking-sche
 import { eq, and } from 'drizzle-orm';
 import { bookingStateMachine, BookingState } from '@/lib/bookings/booking-state-machine';
 import { notificationService } from '@/lib/notifications/notification-service';
+import { emailService } from '@/lib/services/email-service';
 import { z } from 'zod';
 import { RateLimiter } from '@/lib/rate-limiter';
 
@@ -136,7 +137,21 @@ export async function POST(
         .where(eq(bookingsTable.id, bookingId));
     }
 
-    // Send immediate notification to customer
+    // Send immediate notification to customer via email
+    const customerEmail = booking.booking.customerEmail || booking.booking.guestEmail;
+    if (customerEmail) {
+      await emailService.sendProviderAcceptanceNotification(
+        customerEmail,
+        booking.booking.customerName || 'Valued Customer',
+        booking.provider?.businessName || 'Provider',
+        booking.booking.serviceName,
+        booking.booking.bookingDate,
+        booking.booking.startTime,
+        bookingId
+      );
+    }
+
+    // Also send via the existing notification service for other channels
     await notificationService.sendBookingAcceptedNotification({
       bookingId,
       customerId: booking.booking.customerId || undefined,

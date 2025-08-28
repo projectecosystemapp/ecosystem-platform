@@ -189,7 +189,7 @@ export default async function StudioDashboard() {
         />
         <MetricsCard
           title="Average Rating"
-          value={metrics.averageRating.toFixed(1)}
+          value={typeof metrics.averageRating === 'number' ? metrics.averageRating.toFixed(1) : String(metrics.averageRating)}
           icon={Star}
           description={`${metrics.totalReviews} reviews`}
         />

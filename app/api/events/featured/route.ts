@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFeaturedEvents, searchEvents } from "@/db/queries/events-queries";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedQuery } from "@/lib/security/api-handler";
-import { db } from "@/db";
+import { db } from "@/db/db";
 import { eventsTable } from "@/db/schema/events-schema";
 import { sql, desc, and, eq, gte } from "drizzle-orm";
 

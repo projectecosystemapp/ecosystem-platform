@@ -1,17 +1,17 @@
 /**
  * Centralized Fee Calculator for Ecosystem Marketplace
  * 
- * Business Rules:
- * - Platform takes 10% base fee from all transactions
- * - Guest users pay additional 10% surcharge (20% total for platform)
- * - Providers receive 90% of base price regardless of guest status
+ * IMMUTABLE Business Rules per Constitution:
+ * - Platform takes EXACTLY 10% fee from all transactions (no variations)
+ * - Guest users pay additional 10% surcharge (platform receives 20% total from guests)
+ * - Providers ALWAYS receive 90% of base price regardless of guest status
  * - All amounts are calculated in cents to avoid floating point issues
  */
 
 export interface FeeCalculationInput {
   baseAmountCents: number; // Base price in cents
   isGuest: boolean; // Whether this is a guest checkout
-  providerCommissionRate?: number; // Optional custom commission rate (0-1, default 0.10)
+  // Commission rate removed - always 10% per constitution
 }
 
 export interface FeeCalculationResult {
@@ -42,14 +42,15 @@ export interface FeeCalculationResult {
   };
 }
 
-// Constants
-export const DEFAULT_PLATFORM_FEE_RATE = 0.10; // 10% platform fee
-export const GUEST_SURCHARGE_RATE = 0.10; // 10% guest surcharge
+// IMMUTABLE Constants - per Ecosystem Constitution
+export const PLATFORM_FEE_RATE = 0.10; // EXACTLY 10% platform fee - NO VARIATIONS
+export const GUEST_SURCHARGE_RATE = 0.10; // EXACTLY 10% guest surcharge
 export const MIN_TRANSACTION_CENTS = 50; // Minimum $0.50 transaction (Stripe minimum)
 export const MAX_TRANSACTION_CENTS = 99999999; // Maximum ~$1M transaction
 
 /**
  * Calculate all fees and amounts for a transaction
+ * ENFORCES CONSTITUTIONAL MANDATE: Fixed 10% platform fee, 10% guest surcharge
  */
 export function calculateFees(input: FeeCalculationInput): FeeCalculationResult {
   // Validate input
@@ -57,15 +58,11 @@ export function calculateFees(input: FeeCalculationInput): FeeCalculationResult 
   
   const {
     baseAmountCents,
-    isGuest,
-    providerCommissionRate = DEFAULT_PLATFORM_FEE_RATE
+    isGuest
   } = input;
   
-  // Ensure commission rate is valid
-  const platformFeeRate = Math.min(Math.max(providerCommissionRate, 0), 1);
-  
-  // Calculate platform fee (always 10% of base or custom rate)
-  const platformFeeCents = Math.round(baseAmountCents * platformFeeRate);
+  // FIXED platform fee - always exactly 10% (no custom rates allowed)
+  const platformFeeCents = Math.round(baseAmountCents * PLATFORM_FEE_RATE);
   
   // Calculate guest surcharge (10% of base if guest, 0 otherwise)
   const guestSurchargeCents = isGuest 
@@ -97,9 +94,9 @@ export function calculateFees(input: FeeCalculationInput): FeeCalculationResult 
     // Provider amounts
     providerPayoutCents,
     
-    // Rates
+    // Rates (fixed per constitution)
     effectiveCustomerRate,
-    platformFeeRate,
+    platformFeeRate: PLATFORM_FEE_RATE, // Always 0.10
     providerPayoutRate,
     
     // Display amounts
@@ -116,17 +113,16 @@ export function calculateFees(input: FeeCalculationInput): FeeCalculationResult 
 
 /**
  * Calculate fees from a dollar amount (converts to cents internally)
+ * Fixed 10% platform fee per constitution
  */
 export function calculateFeesFromDollars(
   baseAmountDollars: number,
-  isGuest: boolean,
-  providerCommissionRate?: number
+  isGuest: boolean
 ): FeeCalculationResult {
   const baseAmountCents = dollarsToCents(baseAmountDollars);
   return calculateFees({
     baseAmountCents,
-    isGuest,
-    providerCommissionRate
+    isGuest
   });
 }
 
@@ -159,7 +155,6 @@ export function calculateProviderEarnings(
   transactions: Array<{
     baseAmountCents: number;
     isGuest: boolean;
-    providerCommissionRate?: number;
   }>
 ): {
   totalPayoutCents: number;
@@ -207,7 +202,6 @@ export function calculatePlatformRevenue(
   transactions: Array<{
     baseAmountCents: number;
     isGuest: boolean;
-    providerCommissionRate?: number;
   }>
 ): {
   totalRevenueCents: number;
@@ -337,7 +331,7 @@ export function createFeeBreakdown(fees: FeeCalculationResult): Array<{
     breakdown.push({
       label: 'Guest Service Fee',
       amount: fees.displayAmounts.guestSurcharge,
-      type: 'surcharge' as 'surcharge'
+      type: 'surcharge' as const
     });
   }
   
@@ -350,7 +344,7 @@ export function createFeeBreakdown(fees: FeeCalculationResult): Array<{
     {
       label: 'Platform Fee',
       amount: fees.displayAmounts.platformFee,
-      type: 'fee' as 'fee'
+      type: 'fee' as const
     },
     {
       label: 'Provider Payout',

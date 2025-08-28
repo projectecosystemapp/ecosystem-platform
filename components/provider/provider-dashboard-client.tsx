@@ -13,6 +13,8 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import { VerificationBadgeGroup, useProviderVerificationBadges } from "@/components/ui/verification-badge";
 import { Provider } from "@/db/schema/providers-schema";
 
 // Import new dashboard components
@@ -32,6 +34,14 @@ export function ProviderDashboardClient({ provider }: ProviderDashboardClientPro
   const [metricsError, setMetricsError] = useState<Error | null>(null);
   const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  const verificationBadges = useProviderVerificationBadges({
+    isVerified: provider.isVerified,
+    stripeOnboardingComplete: provider.stripeOnboardingComplete,
+    hasInsurance: provider.hasInsurance,
+    averageRating: provider.averageRating,
+    completedBookings: provider.completedBookings,
+  });
 
   // Fetch dashboard metrics
   const fetchMetrics = async () => {
@@ -93,6 +103,13 @@ export function ProviderDashboardClient({ provider }: ProviderDashboardClientPro
           <p className="text-gray-600 mt-1">
             Welcome back, {provider.displayName}! Here&apos;s your business overview.
           </p>
+          <div className="flex items-center gap-4 mt-3">
+            <VerificationBadgeGroup 
+              verifications={verificationBadges}
+              size="sm"
+              maxDisplay={4}
+            />
+          </div>
           <p className="text-xs text-gray-400 mt-2">
             Last updated: {lastRefresh.toLocaleTimeString()}
           </p>
@@ -209,7 +226,42 @@ export function ProviderDashboardClient({ provider }: ProviderDashboardClientPro
         </TabsContent>
 
         <TabsContent value="profile">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Verification Status Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-4">Verification Status</h3>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Current Verifications</p>
+                    <VerificationBadgeGroup 
+                      verifications={verificationBadges}
+                      size="sm"
+                      orientation="vertical"
+                    />
+                  </div>
+                  <div className="pt-3 border-t">
+                    <p className="text-xs text-gray-500">
+                      Verification badges help build trust with customers and may increase your booking rate.
+                    </p>
+                  </div>
+                  {!provider.isVerified && (
+                    <Button variant="outline" size="sm" className="w-full">
+                      Complete Identity Verification
+                    </Button>
+                  )}
+                  {!provider.hasInsurance && (
+                    <Button variant="outline" size="sm" className="w-full">
+                      Add Insurance Information
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            </motion.div>
+            
             {/* Profile Quick View */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}

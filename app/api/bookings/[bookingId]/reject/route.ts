@@ -13,6 +13,7 @@ import { bookingsTable, providersTable } from '@/db/schema/enhanced-booking-sche
 import { eq } from 'drizzle-orm';
 import { bookingStateMachine, BookingState } from '@/lib/bookings/booking-state-machine';
 import { notificationService } from '@/lib/notifications/notification-service';
+import { emailService } from '@/lib/services/email-service';
 import { stripe } from '@/lib/stripe-enhanced';
 import { z } from 'zod';
 import { RateLimiter } from '@/lib/rate-limiter';
@@ -185,7 +186,34 @@ export async function POST(
       }
     }
 
-    // Send notification to customer
+    // Send notification to customer via email
+    const customerEmail = booking.booking.customerEmail || booking.booking.guestEmail;
+    if (customerEmail) {
+      // If there's a refund, send refund confirmation email
+      if (refundInfo && refundInfo.refundId) {
+        await emailService.sendRefundConfirmation(
+          customerEmail,
+          booking.booking.customerName || 'Valued Customer',
+          refundInfo.amount,
+          'full',
+          booking.booking.serviceName,
+          booking.provider?.businessName || 'Provider',
+          reason,
+          refundInfo.refundId
+        );
+      } else {
+        // Send booking cancellation email
+        await emailService.sendBookingCancellation(
+          customerEmail,
+          booking.booking.customerName || 'Valued Customer',
+          booking.provider?.businessName || 'Provider',
+          booking.booking.serviceName,
+          booking.booking.bookingDate
+        );
+      }
+    }
+
+    // Also send via the existing notification service for other channels
     await notificationService.sendBookingRejectedNotification({
       bookingId,
       customerId: booking.booking.customerId || undefined,

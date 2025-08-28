@@ -6,33 +6,19 @@ import { InsertProfile, profilesTable, SelectProfile } from "../schema/profiles-
 
 export const createProfile = async (data: InsertProfile) => {
   try {
-    // Calculate nextCreditRenewal date (4 weeks from now) if not provided
-    const nextCreditRenewal = data.nextCreditRenewal || (() => {
-      const date = new Date();
-      date.setDate(date.getDate() + 28); // 4 weeks = 28 days
-      return date;
-    })();
-    
     // Set default values only if they are not provided
     const profileData = {
       ...data,
-      // Default to 5 credits for free users, but respect provided values
-      usageCredits: data.usageCredits ?? (data.membership === "pro" ? 1000 : 5),
-      // Default to 0 used credits if not specified
-      usedCredits: data.usedCredits ?? 0,
-      // Set next credit renewal if not specified
-      nextCreditRenewal,
       // Default to free membership if not specified
-      membership: data.membership || "free"
+      membership: data.membership || "free",
+      status: data.status || "active"
     };
     
     console.log(`Creating profile with data:`, {
       userId: profileData.userId,
       email: profileData.email,
       membership: profileData.membership,
-      usageCredits: profileData.usageCredits,
-      usedCredits: profileData.usedCredits,
-      status: profileData.status || "active"
+      status: profileData.status
     });
     
     const [newProfile] = await db.insert(profilesTable).values(profileData).returning();
@@ -168,13 +154,7 @@ export const getUserPlanInfo = async (userId: string) => {
     
     return {
       membership: profile.membership,
-      planDuration: profile.planDuration || null,
-      status: profile.status || null,
-      usageCredits: profile.usageCredits || null,
-      usedCredits: profile.usedCredits || null,
-      billingCycleStart: profile.billingCycleStart || null,
-      billingCycleEnd: profile.billingCycleEnd || null,
-      nextCreditRenewal: profile.nextCreditRenewal || null
+      status: profile.status || null
     };
   } catch (error) {
     console.error("Error getting user plan information:", error);

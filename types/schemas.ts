@@ -199,33 +199,6 @@ export const serviceSchema = z.object({
 });
 
 // ============================================================================
-// Subscription Schemas
-// ============================================================================
-
-export const subscriptionStatusSchema = z.enum([
-  'active',
-  'canceled',
-  'incomplete',
-  'incomplete_expired',
-  'past_due',
-  'trialing',
-  'unpaid',
-]);
-
-export const subscriptionSchema = z.object({
-  id: z.string(),
-  userId: userIdSchema,
-  planId: z.string(),
-  status: subscriptionStatusSchema,
-  currentPeriodStart: z.date(),
-  currentPeriodEnd: z.date(),
-  cancelAtPeriodEnd: z.boolean(),
-  price: moneySchema,
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
-
-// ============================================================================
 // Review Schemas
 // ============================================================================
 

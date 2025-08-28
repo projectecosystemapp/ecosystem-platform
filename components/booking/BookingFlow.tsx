@@ -44,7 +44,6 @@ interface BookingFlowProps {
       price: number;
       duration: number;
     }>;
-    commissionRate?: number;
     currency?: string;
   };
   selectedService?: {

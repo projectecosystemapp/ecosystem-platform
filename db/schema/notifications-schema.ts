@@ -18,17 +18,11 @@ import {
   integer
 } from "drizzle-orm/pg-core";
 import { profilesTable } from "./profiles-schema";
+import { providersTable } from "./providers-schema";
 import { createId } from "@paralleldrive/cuid2";
 
 // Notification types enum
 export const notificationTypeEnum = pgEnum("notification_type", [
-  // Subscription notifications
-  "subscription_confirmed",
-  "subscription_renewed",
-  "subscription_cancelled",
-  "subscription_expiring",
-  "subscription_failed",
-  
   // Payment notifications  
   "payment_received",
   "payment_failed",
@@ -126,7 +120,6 @@ export const notificationPreferencesTable = pgTable("notification_preferences", 
   pushEnabled: boolean("push_enabled").default(false).notNull(),
   
   // Category preferences
-  subscriptionNotifications: boolean("subscription_notifications").default(true).notNull(),
   paymentNotifications: boolean("payment_notifications").default(true).notNull(),
   loyaltyNotifications: boolean("loyalty_notifications").default(true).notNull(),
   groupBookingNotifications: boolean("group_booking_notifications").default(true).notNull(),
@@ -225,7 +218,6 @@ export const notificationsTable = pgTable("notifications", {
   // Metadata
   metadata: jsonb("metadata").default('{}').$type<{
     bookingId?: string;
-    subscriptionId?: string;
     loyaltyAccountId?: string;
     groupBookingId?: string;
     referralId?: string;
@@ -362,7 +354,7 @@ export const notificationPriceAlertsTable = pgTable("price_alerts", {
     .notNull()
     .references(() => profilesTable.userId, { onDelete: "cascade" }),
   providerId: uuid("provider_id")
-    .references(() => import("./providers-schema").providersTable.id),
+    .references(() => providersTable.id),
   serviceId: text("service_id"),
   
   // Alert criteria

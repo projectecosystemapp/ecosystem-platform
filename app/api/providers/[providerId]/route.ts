@@ -68,7 +68,7 @@ export async function GET(
         services: provider.services,
         // portfolio: provider.portfolio, // Field doesn't exist in schema yet
         // socialLinks: provider.socialLinks, // Field doesn't exist in schema yet
-        commissionRate: provider.commissionRate,
+        // commissionRate removed - always 10% per constitution
         // Show Stripe status for booking availability
         stripeOnboardingComplete: provider.stripeOnboardingComplete,
         // Don't expose sensitive Stripe account ID

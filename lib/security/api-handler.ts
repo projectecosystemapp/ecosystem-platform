@@ -55,16 +55,6 @@ export function createSecureApiHandler<T = any>(
         );
       }
       
-      // Apply rate limiting if configured
-      if (options.rateLimit) {
-        const rateLimitWrapper = async () => {
-          // Continue with the rest of the handler
-          return await processRequest();
-        };
-        
-        return await withRateLimit(request, rateLimitWrapper);
-      }
-      
       const processRequest = async () => {
         // Authentication check
         let userId: string | null = null;
@@ -173,6 +163,15 @@ export function createSecureApiHandler<T = any>(
         
         return response as NextResponse<unknown>;
       };
+      
+      // Apply rate limiting if configured
+      if (options.rateLimit) {
+        const rateLimitWrapper = async () => {
+          return await processRequest();
+        };
+        
+        return await withRateLimit(request, rateLimitWrapper);
+      }
       
       return await processRequest();
       

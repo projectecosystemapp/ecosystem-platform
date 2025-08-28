@@ -46,7 +46,8 @@ export default function Header() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
         style={{ 
-          minWidth: 'min(95%, 800px)',
+          minWidth: 'min(95vw, 800px)',
+          maxWidth: '95vw',
           backdropFilter: 'blur(12px)'
         }}
       >
@@ -112,7 +113,7 @@ export default function Header() {
             </motion.div>
 
             {/* Navigation - Desktop */}
-            <nav className="hidden md:flex space-x-2">
+            <nav className="hidden lg:flex space-x-2">
               <NavButton 
                 href="/" 
                 icon={<Home size={18} />} 
@@ -199,7 +200,7 @@ export default function Header() {
               </SignedIn>
 
               {/* Mobile menu button */}
-              <div className="md:hidden">
+              <div className="lg:hidden">
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Button
                     variant="ghost"
@@ -236,13 +237,13 @@ export default function Header() {
         <AnimatePresence>
           {isMenuOpen && (
             <motion.nav 
-              className="md:hidden border-t border-white/30 mt-1 p-3 bg-white/80 backdrop-blur-md rounded-b-xl"
+              className="lg:hidden border-t border-white/30 mt-1 p-4 bg-white/90 backdrop-blur-md rounded-b-xl"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="space-y-3 flex flex-col">
+              <div className="space-y-4 flex flex-col">
                 <MobileNavLink 
                   href="/" 
                   icon={<Home size={18} />} 
@@ -316,19 +317,20 @@ function MobileNavLink({ href, icon, label, isActive, onClick }: MobileNavLinkPr
   return (
     <motion.div
       whileHover={{ scale: 1.02, x: 4 }}
+      whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 400, damping: 10 }}
     >
       <Link
         href={href}
         onClick={onClick}
-        className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg border relative overflow-hidden ${
+        className={`flex items-center space-x-4 px-4 py-4 rounded-xl border relative overflow-hidden min-h-[44px] ${
           isActive 
-            ? "bg-primary/10 border-primary/30 text-primary" 
-            : "bg-white/70 border-white/60 text-gray-700"
+            ? "bg-primary/10 border-primary/30 text-primary shadow-sm" 
+            : "bg-white/70 border-white/60 text-gray-700 hover:bg-white/90"
         }`}
       >
-        <span className="relative z-10">{icon}</span>
-        <span className="relative z-10 font-medium">{label}</span>
+        <span className="relative z-10 flex-shrink-0">{icon}</span>
+        <span className="relative z-10 font-medium text-base">{label}</span>
       </Link>
     </motion.div>
   );

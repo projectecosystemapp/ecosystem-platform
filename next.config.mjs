@@ -98,6 +98,8 @@ const nextConfig = {
       'www.gravatar.com',
       'lh3.googleusercontent.com',
       'api.dicebear.com',
+      'source.unsplash.com',
+      'images.unsplash.com',
     ],
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 60,

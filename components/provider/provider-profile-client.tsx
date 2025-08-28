@@ -21,6 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { VerificationBadgeGroup, useProviderVerificationBadges } from "@/components/ui/verification-badge";
 import { cn } from "@/lib/utils";
 import { ProviderHeroSection } from "./provider-hero-section";
 import { ProviderGallery } from "./provider-gallery";
@@ -37,6 +38,14 @@ interface ProviderProfileClientProps {
 export function ProviderProfileClient({ provider }: ProviderProfileClientProps) {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
+
+  const verificationBadges = useProviderVerificationBadges({
+    isVerified: provider.isVerified,
+    stripeOnboardingComplete: provider.stripeOnboardingComplete,
+    hasInsurance: provider.hasInsurance,
+    averageRating: provider.averageRating,
+    completedBookings: provider.completedBookings,
+  });
 
   const handleBookService = (service?: any) => {
     setSelectedService(service || null);
@@ -207,14 +216,14 @@ export function ProviderProfileClient({ provider }: ProviderProfileClientProps) 
                         </div>
                       )}
 
-                      {provider.isVerified && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Shield className="h-4 w-4 text-blue-600" />
-                          <span className="text-blue-600 font-medium">
-                            Verified Provider
-                          </span>
-                        </div>
-                      )}
+                      <div className="space-y-2">
+                        <VerificationBadgeGroup 
+                          verifications={verificationBadges}
+                          size="sm"
+                          orientation="vertical"
+                          maxDisplay={4}
+                        />
+                      </div>
                     </div>
 
                     {/* Book Now Button */}

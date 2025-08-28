@@ -36,11 +36,8 @@ import {
   handleRateLimitError,
   withRateLimitAction 
 } from "@/lib/server-action-rate-limit";
-import {
-  checkSubscriptionEligibility,
-  recordSubscriptionUsage,
-} from "@/lib/subscription-service";
 import { awardBookingPoints } from "@/services/loyalty-service";
+import { emailService } from "@/lib/services/email-service";
 
 // Create a new booking (customer action) with rate limiting
 export async function createBookingAction(data: {
@@ -52,8 +49,7 @@ export async function createBookingAction(data: {
   startTime: string;
   endTime: string;
   customerNotes?: string;
-  applySubscriptionBenefits?: boolean;
-}): Promise<ActionResult<Booking & { subscriptionApplied?: boolean; originalPrice?: number; discountApplied?: number }>> {
+}): Promise<ActionResult<Booking>> {
   try {
     // Apply rate limiting for booking creation
     await enforceRateLimit('booking');
@@ -79,46 +75,11 @@ export async function createBookingAction(data: {
     }
 
     // Check for subscription benefits
-    let finalPrice = data.servicePrice;
-    let platformFee = 0;
-    let providerPayout = 0;
-    let totalAmount = 0;
-    let subscriptionApplied = false;
-    let originalPrice = data.servicePrice;
-    let discountApplied = 0;
-    let subscriptionId: string | undefined;
-
-    if (data.applySubscriptionBenefits !== false) {
-      const eligibility = await checkSubscriptionEligibility(
-        userId, 
-        data.providerId, 
-        data.servicePrice
-      );
-
-      if (eligibility.hasSubscription && eligibility.pricing && eligibility.eligibility.canUseService) {
-        // Apply subscription benefits
-        const pricing = eligibility.pricing;
-        finalPrice = pricing.finalPrice;
-        platformFee = pricing.platformFee;
-        providerPayout = pricing.providerPayout;
-        totalAmount = pricing.totalAmount;
-        subscriptionApplied = true;
-        discountApplied = pricing.discountApplied;
-        subscriptionId = eligibility.subscription?.subscriptionId;
-      } else if (!eligibility.eligibility.canUseService) {
-        return { 
-          isSuccess: false, 
-          message: eligibility.eligibility.reason || "Cannot use subscription for this service" 
-        };
-      }
-    }
-
-    // Fall back to regular fee calculation if no subscription applied
-    if (!subscriptionApplied) {
-      totalAmount = finalPrice;
-      platformFee = totalAmount * parseFloat(provider.commissionRate.toString());
-      providerPayout = totalAmount - platformFee;
-    }
+    // Fixed fee calculation per constitution
+    const finalPrice = data.servicePrice;
+    const totalAmount = finalPrice;
+    const platformFee = totalAmount * 0.10; // Fixed 10% platform fee per constitution
+    const providerPayout = totalAmount - platformFee;
 
     const bookingData: NewBooking = {
       providerId: data.providerId,
@@ -134,52 +95,21 @@ export async function createBookingAction(data: {
       platformFee: platformFee.toString(),
       providerPayout: providerPayout.toString(),
       customerNotes: data.customerNotes,
-      metadata: subscriptionApplied ? {
-        subscriptionApplied: true,
-        subscriptionId,
-        originalPrice: originalPrice,
-        discountApplied: discountApplied,
-      } as any : {} as any,
+      metadata: {} as any,
     };
 
     const newBooking = await createBooking(bookingData);
     
-    // Record subscription usage if benefits were applied and service is included/discounted
-    if (subscriptionApplied && subscriptionId && (finalPrice === 0 || discountApplied > 0)) {
-      try {
-        await recordSubscriptionUsage(
-          subscriptionId,
-          newBooking.id,
-          `Booking created with subscription benefits: ${data.serviceName}`,
-          {
-            originalPrice,
-            finalPrice,
-            discountApplied,
-          }
-        );
-      } catch (usageError) {
-        console.error("Failed to record subscription usage:", usageError);
-        // Don't fail the booking creation, but log the error
-      }
-    }
-    
     // Audit log for security tracking
-    console.log(`[AUDIT] User ${userId} created booking ${newBooking.id} for provider ${data.providerId} at ${new Date().toISOString()} ${subscriptionApplied ? '(subscription applied)' : ''}`);
+    console.log(`[AUDIT] User ${userId} created booking ${newBooking.id} for provider ${data.providerId} at ${new Date().toISOString()}`);
     
     revalidatePath("/dashboard");
     revalidatePath(`/providers/${provider.slug}`);
     
     return { 
       isSuccess: true, 
-      message: subscriptionApplied 
-        ? `Booking created successfully with subscription benefits (${discountApplied > 0 ? `$${discountApplied.toFixed(2)} discount` : 'included in subscription'})` 
-        : "Booking created successfully",
-      data: {
-        ...newBooking,
-        subscriptionApplied,
-        originalPrice: subscriptionApplied ? originalPrice : undefined,
-        discountApplied: subscriptionApplied ? discountApplied : undefined,
-      }
+      message: "Booking created successfully",
+      data: newBooking
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Failed to create booking";
@@ -553,6 +483,12 @@ export async function completeBookingAction(
       return { isSuccess: false, message: "Unauthorized" };
     }
 
+    // Get provider info for email
+    const [providerInfo] = await db
+      .select()
+      .from(providersTable)
+      .where(eq(providersTable.id, booking.providerId));
+
     // Complete the booking using the new function
     const updatedBooking = await completeBooking(bookingId, userId, notes);
 
@@ -565,6 +501,55 @@ export async function completeBookingAction(
         "completed",
         { processedAt: new Date() }
       );
+    }
+
+    // Send review request email to customer after 24 hours
+    const customerEmail = booking.customerEmail || booking.guestEmail;
+    if (customerEmail) {
+      // Schedule review request email for 24 hours after completion
+      // For now, we'll just log it - in production this would use a job queue
+      console.log(`[EMAIL] Scheduling review request email for customer ${booking.customerId} in 24 hours for booking ${bookingId}`);
+      
+      // Send immediate completion notification
+      try {
+        const reviewLink = `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${bookingId}/review`;
+        await emailService.send({
+          to: customerEmail,
+          subject: `Service Completed - How was your experience?`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: #28a745; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1>Service Completed! ✅</h1>
+                <p>Thank you for choosing our marketplace</p>
+              </div>
+              <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p>Hi ${booking.customerName || 'Valued Customer'},</p>
+                <p>Your service with <strong>${provider?.businessName || 'the provider'}</strong> has been marked as completed.</p>
+                
+                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  <h3>Completed Service Details</h3>
+                  <p><strong>Service:</strong> ${booking.serviceName}</p>
+                  <p><strong>Provider:</strong> ${provider?.businessName || 'Provider'}</p>
+                  <p><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</p>
+                  ${notes ? `<p><strong>Provider Notes:</strong> ${notes}</p>` : ''}
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${reviewLink}" style="display: inline-block; padding: 15px 30px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; font-size: 16px;">Leave a Review</a>
+                </div>
+                
+                <p>We'd love to hear about your experience! Your feedback helps us maintain quality and helps other customers make informed decisions.</p>
+                
+                <p>If you have any questions or concerns, please don't hesitate to contact us.</p>
+                
+                <p>Thank you for your business!</p>
+              </div>
+            </div>
+          `
+        });
+      } catch (emailError) {
+        console.error(`[EMAIL] Failed to send completion email for booking ${bookingId}:`, emailError);
+      }
     }
     
     // Award loyalty points to customer after booking completion

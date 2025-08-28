@@ -22,7 +22,7 @@ async function getProviderBookings(providerId: string, startDate: Date, endDate:
       scheduledFor: bookingsTable.bookingDate,
       duration: bookingsTable.serviceDuration,
       status: bookingsTable.status,
-      totalAmount: bookingsTable.totalAmount,
+      totalAmount: sql<number>`CAST(${bookingsTable.totalAmount} AS DECIMAL)`,
       notes: bookingsTable.customerNotes,
     })
     .from(bookingsTable)
