@@ -8,6 +8,7 @@ import { providersTable, providerAvailabilityTable } from "@/db/schema/providers
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { reviewsTable } from "@/db/schema/reviews-schema";
 import { bookingsTable } from "@/db/schema/bookings-schema";
+import { format } from "date-fns";
 import { faker } from "@faker-js/faker";
 
 const services = {
@@ -225,20 +226,18 @@ async function seedData() {
         const bookingDate = faker.date.past({ years: 1 });
         
         await db.insert(bookingsTable).values({
-          id: bookingId,
           providerId: provider.id,
           customerId: customerId,
-          serviceType: template.serviceType,
           serviceName: services[serviceType][0].name,
-          startTime: bookingDate.toISOString(),
-          endTime: new Date(bookingDate.getTime() + 60 * 60 * 1000).toISOString(),
+          servicePrice: services[serviceType][0].price.toString(),
+          serviceDuration: 60,
+          bookingDate: bookingDate,
+          startTime: format(bookingDate, 'HH:mm'),
+          endTime: format(new Date(bookingDate.getTime() + 60 * 60 * 1000), 'HH:mm'),
           status: "completed",
           totalAmount: services[serviceType][0].price.toString(),
-          providerAmount: (services[serviceType][0].price * 0.9).toString(),
+          providerPayout: (services[serviceType][0].price * 0.9).toString(),
           platformFee: (services[serviceType][0].price * 0.1).toString(),
-          paymentStatus: "captured",
-          createdAt: bookingDate,
-          updatedAt: bookingDate,
         });
         
         // Create the review

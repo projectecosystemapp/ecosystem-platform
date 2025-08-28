@@ -62,7 +62,7 @@ export async function authenticateRequest(): Promise<{
   
   return {
     userId,
-    sessionId,
+    sessionId: sessionId ?? undefined,
     ipAddress,
     userAgent,
   };

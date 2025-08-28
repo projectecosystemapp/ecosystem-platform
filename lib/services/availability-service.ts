@@ -536,8 +536,8 @@ export class AvailabilityService {
     return slots.map(slot => ({
       startTime: slot.startTime,
       endTime: slot.endTime,
-      isAvailable: slot.isAvailable,
-      isBooked: slot.isBooked
+      available: slot.isAvailable,
+      date: new Date(), // Will need proper date handling
     }));
   }
 

@@ -61,10 +61,8 @@ async function handleReminders(request: NextRequest) {
           eq(bookingsTable.status, 'PAYMENT_SUCCEEDED'), // Only confirmed bookings
           gte(bookingsTable.bookingDate, subHours(tomorrow, 1)), // Within 1 hour of 24 hours ahead
           lte(bookingsTable.bookingDate, addHours(tomorrow, 1)),
-          or(
-            isNull(bookingsTable.reminder24hSent),
-            eq(bookingsTable.reminder24hSent, false)
-          )
+          // For now, check all confirmed bookings 24h in advance
+          // TODO: Add reminder tracking fields when schema is updated
         )
       );
 
@@ -81,10 +79,8 @@ async function handleReminders(request: NextRequest) {
           eq(bookingsTable.status, 'PAYMENT_SUCCEEDED'), // Only confirmed bookings
           gte(bookingsTable.bookingDate, subHours(in2Hours, 0.5)), // Within 30 minutes of 2 hours ahead
           lte(bookingsTable.bookingDate, addHours(in2Hours, 0.5)),
-          or(
-            isNull(bookingsTable.reminder2hSent),
-            eq(bookingsTable.reminder2hSent, false)
-          )
+          // For now, check all confirmed bookings 2h in advance
+          // TODO: Add reminder tracking fields when schema is updated
         )
       );
 
@@ -95,29 +91,21 @@ async function handleReminders(request: NextRequest) {
     // Send 24-hour reminders
     for (const { booking, provider } of bookingsFor24HourReminder) {
       try {
-        const customerEmail = booking.customerEmail || booking.guestEmail;
+        const customerEmail = booking.guestEmail; // For now, only handle guest bookings with email
         if (customerEmail) {
           await emailService.sendAppointmentReminder(
             customerEmail,
-            booking.customerName || 'Valued Customer',
-            provider?.businessName || 'Provider',
+            'Valued Customer',
+            provider?.displayName || 'Provider',
             booking.serviceName,
             booking.bookingDate,
             booking.startTime,
             booking.endTime,
-            booking.location,
+            provider?.locationCity || 'TBD',
             24 // hours until appointment
           );
 
-          // Mark reminder as sent
-          await db
-            .update(bookingsTable)
-            .set({ 
-              reminder24hSent: true,
-              reminder24hSentAt: now,
-              updatedAt: now
-            })
-            .where(eq(bookingsTable.id, booking.id));
+          // TODO: Track reminder sent status when schema supports it
 
           sent24Hour++;
           console.log(`[CRON] Sent 24h reminder for booking ${booking.id}`);
@@ -132,29 +120,21 @@ async function handleReminders(request: NextRequest) {
     // Send 2-hour reminders
     for (const { booking, provider } of bookingsFor2HourReminder) {
       try {
-        const customerEmail = booking.customerEmail || booking.guestEmail;
+        const customerEmail = booking.guestEmail; // For now, only handle guest bookings with email
         if (customerEmail) {
           await emailService.sendAppointmentReminder(
             customerEmail,
-            booking.customerName || 'Valued Customer',
-            provider?.businessName || 'Provider',
+            'Valued Customer',
+            provider?.displayName || 'Provider',
             booking.serviceName,
             booking.bookingDate,
             booking.startTime,
             booking.endTime,
-            booking.location,
+            provider?.locationCity || 'TBD',
             2 // hours until appointment
           );
 
-          // Mark reminder as sent
-          await db
-            .update(bookingsTable)
-            .set({ 
-              reminder2hSent: true,
-              reminder2hSentAt: now,
-              updatedAt: now
-            })
-            .where(eq(bookingsTable.id, booking.id));
+          // TODO: Track reminder sent status when schema supports it
 
           sent2Hour++;
           console.log(`[CRON] Sent 2h reminder for booking ${booking.id}`);

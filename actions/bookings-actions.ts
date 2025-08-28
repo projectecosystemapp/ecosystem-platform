@@ -25,6 +25,7 @@ import {
   bookingStatus 
 } from "@/db/schema/bookings-schema";
 import { providersTable } from "@/db/schema/providers-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { ActionResult } from "@/types/actions/actions-types";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
@@ -504,7 +505,14 @@ export async function completeBookingAction(
     }
 
     // Send review request email to customer after 24 hours
-    const customerEmail = booking.customerEmail || booking.guestEmail;
+    // We'll need to get customer email from their profile
+    const customerProfile = await db.select({
+      email: profilesTable.email
+    }).from(profilesTable)
+    .where(eq(profilesTable.userId, booking.customerId))
+    .limit(1);
+    
+    const customerEmail = customerProfile[0]?.email || booking.guestEmail;
     if (customerEmail) {
       // Schedule review request email for 24 hours after completion
       // For now, we'll just log it - in production this would use a job queue
@@ -523,13 +531,13 @@ export async function completeBookingAction(
                 <p>Thank you for choosing our marketplace</p>
               </div>
               <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-                <p>Hi ${booking.customerName || 'Valued Customer'},</p>
-                <p>Your service with <strong>${provider?.businessName || 'the provider'}</strong> has been marked as completed.</p>
+                <p>Hi Valued Customer,</p>
+                <p>Your service with <strong>${provider?.displayName || 'the provider'}</strong> has been marked as completed.</p>
                 
                 <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                   <h3>Completed Service Details</h3>
                   <p><strong>Service:</strong> ${booking.serviceName}</p>
-                  <p><strong>Provider:</strong> ${provider?.businessName || 'Provider'}</p>
+                  <p><strong>Provider:</strong> ${provider?.displayName || 'Provider'}</p>
                   <p><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</p>
                   ${notes ? `<p><strong>Provider Notes:</strong> ${notes}</p>` : ''}
                 </div>
