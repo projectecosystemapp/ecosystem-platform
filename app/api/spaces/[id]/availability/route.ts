@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkSpaceAvailability, blockSpaceAvailability } from "@/db/queries/spaces-queries";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { createSecureApiHandler, createApiResponse, createApiError, getValidatedQuery, getValidatedBody } from "@/lib/security/api-handler";
+import { createSecureApiHandler, createApiResponse, createApiError, getValidatedQuery, getValidatedBody, type ApiContext } from "@/lib/security/api-handler";
 import { db } from "@/db/db";
 import { providersTable, spacesTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -51,9 +51,9 @@ interface RouteParams {
 /**
  * GET handler - Check space availability
  */
-async function handleCheckAvailability(req: NextRequest, { params }: RouteParams) {
+async function handleCheckAvailability(req: NextRequest, context: ApiContext) {
   try {
-    const { id } = params;
+    const id = context.params?.id;
     
     if (!id) {
       return createApiError("Space ID is required", { status: 400 });
@@ -162,10 +162,10 @@ async function handleCheckAvailability(req: NextRequest, { params }: RouteParams
 /**
  * POST handler - Block space availability (owner only)
  */
-async function handleBlockAvailability(req: NextRequest, context: any, { params }: RouteParams) {
+async function handleBlockAvailability(req: NextRequest, context: ApiContext) {
   try {
     const { userId } = context;
-    const { id } = params;
+    const id = context.params?.id;
     
     if (!id) {
       return createApiError("Space ID is required", { status: 400 });

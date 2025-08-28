@@ -652,25 +652,25 @@ export class BookingService {
           endTime: request.endTime,
           totalAmount: request.totalAmount,
           bookingId: booking.id,
-          providerEmail: provider.contactEmail || undefined,
+          providerEmail: undefined, // Provider email would need to be fetched from profiles table
           location: provider.city ? `${provider.city}, ${provider.state}` : undefined,
         });
       }
       
-      // Send provider notification email
-      if (provider.contactEmail) {
-        await emailService.sendProviderBookingNotification({
-          providerName: provider.contactEmail, // Using email as the 'to' field
-          customerName: request.customerId || 'Guest Customer',
-          serviceName: request.serviceName,
-          bookingDate: request.bookingDate,
-          startTime: request.startTime,
-          endTime: request.endTime,
-          bookingId: booking.id,
-          customerEmail: undefined, // Would come from customer profile
-          customerNotes: request.customerNotes,
-        });
-      }
+      // Send provider notification email - skipped as contactEmail not available
+      // if (provider.contactEmail) {
+      //   await emailService.sendProviderBookingNotification({
+      //     providerName: provider.contactEmail, // Using email as the 'to' field
+      //     customerName: request.customerId || 'Guest Customer',
+      //     serviceName: request.serviceName,
+      //     bookingDate: request.bookingDate,
+      //     startTime: request.startTime,
+      //     endTime: request.endTime,
+      //     bookingId: booking.id,
+      //     customerEmail: undefined, // Would come from customer profile
+      //     customerNotes: request.customerNotes,
+      //   });
+      // }
     } catch (error) {
       // Log but don't throw - email failures shouldn't break booking
       console.error('Failed to send booking emails:', error);

@@ -8,7 +8,27 @@ import { randomBytes, createHash, timingSafeEqual } from "crypto";
 // CSRF token configuration
 const CSRF_TOKEN_LENGTH = 32; // bytes
 const CSRF_TOKEN_LIFETIME = 3600; // 1 hour in seconds
-const CSRF_SECRET = process.env.CSRF_SECRET || "default-csrf-secret-change-in-production";
+
+// SECURITY: Enforce CSRF secret configuration in production
+function getCsrfSecret(): string {
+  const secret = process.env.CSRF_SECRET;
+  
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('CSRF_SECRET environment variable must be set in production');
+    }
+    console.warn('CSRF_SECRET not set - using development default (INSECURE)');
+    return "dev-csrf-secret-not-for-production-use";
+  }
+  
+  if (secret.length < 32) {
+    throw new Error('CSRF_SECRET must be at least 32 characters long');
+  }
+  
+  return secret;
+}
+
+const CSRF_SECRET = getCsrfSecret();
 
 interface CsrfTokenData {
   token: string;

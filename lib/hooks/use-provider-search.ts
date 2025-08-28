@@ -115,7 +115,7 @@ export function useProviderSearch(
   const debouncedSearchQuery = useDebounce(searchQuery, debounceMs);
 
   // Build query key for React Query
-  const buildQueryKey = () => [
+  const buildQueryKey = useCallback(() => [
     "providers",
     "search",
     {
@@ -135,7 +135,13 @@ export function useProviderSearch(
       page: currentPage,
       pageSize,
     },
-  ];
+  ], [
+    debouncedSearchQuery,
+    filters,
+    sortBy,
+    currentPage,
+    pageSize
+  ]);
 
   // Search query
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -211,7 +217,7 @@ export function useProviderSearch(
   // Update URL when filters change
   useEffect(() => {
     updateURL();
-  }, [debouncedSearchQuery, filters, sortBy, currentPage]);
+  }, [debouncedSearchQuery, filters, sortBy, currentPage, updateURL]);
 
   // Apply filters (trigger search)
   const applyFilters = useCallback(() => {
@@ -296,7 +302,7 @@ export function useProviderSearch(
         staleTime: 1000 * 60 * 5,
       });
     }
-  }, [currentPage, totalPages, queryClient]);
+  }, [currentPage, totalPages, queryClient, buildQueryKey]);
 
   return {
     // Data

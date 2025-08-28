@@ -34,7 +34,7 @@ const createPaymentIntentSchema = z.object({
   currency: z.string().default('usd'),
   isGuest: z.boolean().default(false),
   customerEmail: z.string().email().optional(),
-  metadata: z.record(z.string()).optional(),
+  metadata: z.record(z.string(), z.string()).optional(),
 });
 
 /**
@@ -155,14 +155,10 @@ export async function POST(req: NextRequest) {
     // Create transaction record in database
     await db.insert(transactionsTable).values({
       bookingId: booking.id,
-      stripePaymentIntentId: paymentIntent.id,
       amount: String(amountCents / 100), // Store in dollars
       platformFee: String(fees.platformFee / 100),
       providerPayout: String(fees.providerReceives / 100),
-      currency,
       status: 'pending',
-      type: 'booking_payment',
-      metadata: paymentMetadata,
     });
     
     // Update booking status to payment_pending

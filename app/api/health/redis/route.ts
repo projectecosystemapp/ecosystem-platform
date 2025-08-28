@@ -61,25 +61,21 @@ export async function GET(request: NextRequest) {
     
     // Get additional Redis info
     const client = getUpstashClient();
-    let dbSize = 0;
+    let dbSize: number | null = 0;
     let memoryUsage = null;
     
     if (client) {
       try {
-        // Get database size
-        dbSize = await client.dbsize();
-        
-        // Try to get memory info (may not be available in all Redis configurations)
+        // Try to get dbsize if available (may not work with Upstash REST API)
         try {
-          const info = await client.info('memory');
-          // Parse memory usage from info string
-          const match = info.match(/used_memory_human:([^\r\n]+)/);
-          if (match) {
-            memoryUsage = match[1];
-          }
+          dbSize = await (client as any).dbsize?.() ?? null;
         } catch {
-          // Memory info not available
+          // dbsize not available in Upstash REST API
+          dbSize = null;
         }
+        
+        // Memory info is generally not available in Upstash REST API
+        // Skip memory info for Upstash
       } catch (err) {
         console.error('Failed to get Redis info:', err);
       }

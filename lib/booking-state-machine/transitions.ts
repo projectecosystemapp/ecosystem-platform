@@ -140,6 +140,15 @@ export const ValidTransitions: StateTransition[] = [
   },
   {
     from: BookingStates.PENDING_PROVIDER,
+    to: BookingStates.CANCELED_CUSTOMER,
+    event: TransitionEvents.CUSTOMER_CANCELS,
+    guard: async (ctx) => {
+      // Customer can cancel while awaiting provider acceptance
+      return ctx.actor.type === 'customer';
+    }
+  },
+  {
+    from: BookingStates.PENDING_PROVIDER,
     to: BookingStates.CANCELED_PROVIDER,
     event: TransitionEvents.PROVIDER_TIMEOUT,
     guard: async (ctx) => {
@@ -283,22 +292,7 @@ export const ValidTransitions: StateTransition[] = [
     event: TransitionEvents.DISPUTE_RAISED
   },
   
-  // Dispute can be raised from various states
-  {
-    from: BookingStates.CANCELED_CUSTOMER,
-    to: BookingStates.DISPUTE,
-    event: TransitionEvents.DISPUTE_RAISED
-  },
-  {
-    from: BookingStates.NO_SHOW_CUSTOMER,
-    to: BookingStates.DISPUTE,
-    event: TransitionEvents.DISPUTE_RAISED
-  },
-  {
-    from: BookingStates.REFUNDED_PARTIAL,
-    to: BookingStates.DISPUTE,
-    event: TransitionEvents.DISPUTE_RAISED
-  }
+  // Note: Disputes can only be raised from completed bookings per PRD
 ];
 
 /**

@@ -76,7 +76,6 @@ export class NotificationService {
       const user = await db
         .select({
           email: profilesTable.email,
-          name: profilesTable.name,
         })
         .from(profilesTable)
         .where(eq(profilesTable.userId, userId))
@@ -210,7 +209,7 @@ export class NotificationService {
           failedAt: !success ? new Date() : undefined,
           errorMessage: errorMessage,
           retryCount: sql`${notificationsTable.retryCount} + 1`,
-          nextRetryAt: !success && notification.retryCount < NOTIFICATION_CONFIG.maxRetries 
+          nextRetryAt: !success && (notification.retryCount || 0) < NOTIFICATION_CONFIG.maxRetries 
             ? new Date(Date.now() + NOTIFICATION_CONFIG.retryDelayMinutes * 60 * 1000)
             : undefined,
           updatedAt: new Date(),
@@ -660,7 +659,7 @@ export class NotificationService {
     return await db
       .insert(priceAlertsTable)
       .values({
-        userId,
+        customerId: userId,
         providerId: providerId as any,
         serviceId,
         targetPriceCents: targetPrice,
@@ -693,7 +692,7 @@ export class NotificationService {
 
       if (shouldTrigger) {
         await this.sendNotification({
-          userId: alert.userId,
+          userId: alert.customerId,
           type: 'price_drop_alert',
           title: 'Price Drop Alert!',
           body: `The service you're watching is now available at $${(currentPrice / 100).toFixed(2)}`,

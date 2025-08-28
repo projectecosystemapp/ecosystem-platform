@@ -35,10 +35,18 @@ const inquirySchema = z.object({
 /**
  * POST handler - Send inquiry or make offer
  */
-async function handleCreateInquiry(req: NextRequest, params: { id: string }, context: any) {
+async function handleCreateInquiry(req: NextRequest, context: { userId?: string | null; params?: Record<string, string>; searchParams?: URLSearchParams }) {
   try {
-    const { userId } = context;
-    const { id: thingId } = params;
+    const { userId, params } = context;
+    const thingId = params?.id;
+
+    if (!userId) {
+      return createApiError("Authentication required", { status: 401 });
+    }
+
+    if (!thingId) {
+      return createApiError("Thing ID is required", { status: 400 });
+    }
     const body = getValidatedBody<z.infer<typeof inquirySchema>>(req);
     
     if (!body) {
@@ -106,7 +114,7 @@ async function handleCreateInquiry(req: NextRequest, params: { id: string }, con
       
       const emailBody = `
         <h2>${emailSubject}</h2>
-        <p><strong>From:</strong> ${buyerProfile.displayName}</p>
+        <p><strong>From:</strong> ${buyerProfile.email || 'Anonymous User'}</p>
         ${body.offerAmount ? `<p><strong>Offer Amount:</strong> $${body.offerAmount}</p>` : ''}
         <p><strong>Message:</strong></p>
         <p>${body.message}</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { initializeMapbox, DEFAULT_MAP_CONFIG, handleMapError } from '@/lib/mapbox/client';
 import { Coordinates, MapViewState } from '@/lib/mapbox/types';
@@ -49,6 +49,19 @@ export default function BaseMap({
   const [error, setError] = useState<string | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
 
+  // Memoize callback functions to avoid re-initializing map
+  const memoizedOnMapLoad = useCallback((mapInstance: mapboxgl.Map) => {
+    onMapLoad?.(mapInstance);
+  }, [onMapLoad]);
+
+  const memoizedOnClick = useCallback((coordinates: Coordinates, event: mapboxgl.MapMouseEvent) => {
+    onClick?.(coordinates, event);
+  }, [onClick]);
+
+  const memoizedOnMove = useCallback((viewState: MapViewState) => {
+    onMove?.(viewState);
+  }, [onMove]);
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -75,23 +88,23 @@ export default function BaseMap({
       // Set up event listeners
       map.current.on('load', () => {
         setIsLoaded(true);
-        onMapLoad?.(map.current!);
+        memoizedOnMapLoad(map.current!);
       });
 
-      if (onClick) {
+      if (memoizedOnClick) {
         map.current.on('click', (e) => {
-          onClick(
+          memoizedOnClick(
             { lat: e.lngLat.lat, lng: e.lngLat.lng },
             e
           );
         });
       }
 
-      if (onMove) {
+      if (memoizedOnMove) {
         map.current.on('move', () => {
           if (!map.current) return;
           const center = map.current.getCenter();
-          onMove({
+          memoizedOnMove({
             latitude: center.lat,
             longitude: center.lng,
             zoom: map.current.getZoom(),
@@ -115,7 +128,7 @@ export default function BaseMap({
       map.current?.remove();
       map.current = null;
     };
-  }, []);
+  }, [style, center, zoom, interactive, showControls, memoizedOnMapLoad, memoizedOnClick, memoizedOnMove]);
 
   // Update map style
   useEffect(() => {

@@ -11,6 +11,7 @@ import { logApiStart, logApiSuccess, logApiError } from "@/lib/logger";
 import { createPaymentIntentWithIdempotency } from "@/lib/stripe-enhanced";
 import { calculateFees, dollarsToCents, MIN_TRANSACTION_CENTS } from "@/lib/payments/fee-calculator";
 import { generateConfirmationCode } from "@/lib/utils";
+import { getCorsHeaders } from "@/lib/security/cors";
 import * as crypto from "crypto";
 
 // Input validation schema
@@ -362,15 +363,17 @@ export const POST = withRateLimitRedis(
   }
 );
 
-// OPTIONS request for CORS preflight
+// OPTIONS request for CORS preflight - SECURITY: Use secure CORS headers
 export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+  
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_APP_URL || '*',
+      ...corsHeaders,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400', // 24 hours
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token',
     },
   });
 }

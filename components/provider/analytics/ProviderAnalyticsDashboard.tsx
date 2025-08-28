@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { TimePeriod } from '@/db/queries/analytics-queries';
 import { AnalyticsOverview } from '@/app/api/providers/[providerId]/analytics/overview/route';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +36,7 @@ export default function ProviderAnalyticsDashboard({ providerId }: ProviderAnaly
     'all': 'All time',
   };
 
-  const fetchAnalytics = async (selectedPeriod: TimePeriod) => {
+  const fetchAnalytics = useCallback(async (selectedPeriod: TimePeriod) => {
     try {
       setLoading(true);
       setError(null);
@@ -61,11 +61,11 @@ export default function ProviderAnalyticsDashboard({ providerId }: ProviderAnaly
     } finally {
       setLoading(false);
     }
-  };
+  }, [providerId]);
 
   useEffect(() => {
     fetchAnalytics(period);
-  }, [providerId, period]);
+  }, [providerId, period, fetchAnalytics]);
 
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod as TimePeriod);

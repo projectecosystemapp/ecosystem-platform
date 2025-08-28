@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,7 +81,7 @@ export function ConversationView({
     : null;
 
   // Fetch messages for conversation
-  const fetchMessages = async (page = 1) => {
+  const fetchMessages = useCallback(async (page = 1) => {
     try {
       setLoading(true);
       const response = await fetch(`/api/messages/${conversationId}?page=${page}&limit=50`);
@@ -113,13 +113,13 @@ export function ConversationView({
     } finally {
       setLoading(false);
     }
-  };
+  }, [conversationId]);
 
   useEffect(() => {
     if (conversationId) {
       fetchMessages();
     }
-  }, [conversationId]);
+  }, [conversationId, fetchMessages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

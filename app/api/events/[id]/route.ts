@@ -46,8 +46,8 @@ const updateEventSchema = z.object({
   
   // Capacity & Pricing
   maxAttendees: z.number().min(1).optional().nullable(),
-  price: z.number().min(0).optional(),
-  earlyBirdPrice: z.number().min(0).optional().nullable(),
+  price: z.union([z.number(), z.string()]).transform(val => typeof val === 'number' ? val.toString() : val).optional(),
+  earlyBirdPrice: z.union([z.number(), z.string()]).transform(val => typeof val === 'number' ? val.toString() : val).optional().nullable(),
   earlyBirdDeadline: z.string().transform(val => new Date(val)).optional().nullable(),
   
   // Media
@@ -193,7 +193,14 @@ async function handleUpdateEvent(req: NextRequest, context: ApiContext) {
       });
     }
     
-    // Check if user owns the event
+    // Check if user owns the event - userId is guaranteed to exist due to requireAuth
+    if (!userId) {
+      return createApiError("Authentication required", { 
+        status: 401,
+        code: "UNAUTHORIZED"
+      });
+    }
+    
     const [provider] = await db
       .select()
       .from(providersTable)
@@ -271,7 +278,14 @@ async function handleDeleteEvent(req: NextRequest, context: ApiContext) {
       });
     }
     
-    // Check if user owns the event
+    // Check if user owns the event - userId is guaranteed to exist due to requireAuth
+    if (!userId) {
+      return createApiError("Authentication required", { 
+        status: 401,
+        code: "UNAUTHORIZED"
+      });
+    }
+    
     const [provider] = await db
       .select()
       .from(providersTable)

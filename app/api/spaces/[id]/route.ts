@@ -112,9 +112,10 @@ interface RouteParams {
 /**
  * GET handler - Get single space
  */
-async function handleGetSpace(req: NextRequest, { params }: RouteParams) {
+async function handleGetSpace(req: NextRequest, context: { userId?: string | null; params?: Record<string, string>; searchParams?: URLSearchParams }) {
   try {
-    const { id } = params;
+    const { params } = context;
+    const id = params?.id;
     
     if (!id) {
       return createApiError("Space ID is required", { status: 400 });
@@ -205,10 +206,10 @@ async function handleGetSpace(req: NextRequest, { params }: RouteParams) {
 /**
  * PATCH handler - Update space
  */
-async function handleUpdateSpace(req: NextRequest, context: any, { params }: RouteParams) {
+async function handleUpdateSpace(req: NextRequest, context: { userId?: string | null; params?: Record<string, string>; searchParams?: URLSearchParams }) {
   try {
-    const { userId } = context;
-    const { id } = params;
+    const { userId, params } = context;
+    const id = params?.id;
     
     if (!id) {
       return createApiError("Space ID is required", { status: 400 });
@@ -245,8 +246,20 @@ async function handleUpdateSpace(req: NextRequest, context: any, { params }: Rou
       });
     }
     
+    // Transform numeric fields to strings for database storage
+    const transformedBody: any = {
+      ...body,
+      ...(body.hourlyRate !== undefined && { hourlyRate: body.hourlyRate.toString() }),
+      ...(body.halfDayRate !== undefined && { halfDayRate: body.halfDayRate.toString() }),
+      ...(body.dailyRate !== undefined && { dailyRate: body.dailyRate.toString() }),
+      ...(body.weeklyRate !== undefined && { weeklyRate: body.weeklyRate.toString() }),
+      ...(body.monthlyRate !== undefined && { monthlyRate: body.monthlyRate.toString() }),
+      ...(body.cleaningFee !== undefined && { cleaningFee: body.cleaningFee.toString() }),
+      ...(body.securityDeposit !== undefined && { securityDeposit: body.securityDeposit.toString() }),
+    };
+    
     // Update the space
-    const updatedSpace = await updateSpace(id, body);
+    const updatedSpace = await updateSpace(id, transformedBody as Parameters<typeof updateSpace>[1]);
     
     return createApiResponse(
       { space: updatedSpace },
@@ -265,10 +278,10 @@ async function handleUpdateSpace(req: NextRequest, context: any, { params }: Rou
 /**
  * DELETE handler - Delete space
  */
-async function handleDeleteSpace(req: NextRequest, context: any, { params }: RouteParams) {
+async function handleDeleteSpace(req: NextRequest, context: { userId?: string | null; params?: Record<string, string>; searchParams?: URLSearchParams }) {
   try {
-    const { userId } = context;
-    const { id } = params;
+    const { userId, params } = context;
+    const id = params?.id;
     
     if (!id) {
       return createApiError("Space ID is required", { status: 400 });

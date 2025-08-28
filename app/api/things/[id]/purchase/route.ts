@@ -49,10 +49,19 @@ const purchaseSchema = z.object({
 /**
  * POST handler - Direct purchase of a thing
  */
-async function handlePurchaseThing(req: NextRequest, params: { id: string }, context: any) {
+async function handlePurchaseThing(req: NextRequest, context: { userId?: string | null; params?: Record<string, string>; searchParams?: URLSearchParams }) {
   try {
-    const { userId } = context;
-    const { id: thingId } = params;
+    const { userId, params } = context;
+    const thingId = params?.id;
+
+    if (!userId) {
+      return createApiError("Authentication required", { status: 401 });
+    }
+
+    if (!thingId) {
+      return createApiError("Thing ID is required", { status: 400 });
+    }
+
     const body = getValidatedBody<z.infer<typeof purchaseSchema>>(req);
     
     if (!body) {
@@ -133,7 +142,7 @@ async function handlePurchaseThing(req: NextRequest, params: { id: string }, con
     try {
       // Create Stripe payment intent
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(fees.customerTotal * 100), // Convert to cents
+        amount: Math.round(fees.totalAmount * 100), // Convert to cents
         currency: thing.currency || 'usd',
         metadata: {
           type: 'thing_purchase',
@@ -143,7 +152,7 @@ async function handlePurchaseThing(req: NextRequest, params: { id: string }, con
           itemPrice: itemPrice.toString(),
           shippingCost: shippingCost.toString(),
           platformFee: fees.platformFee.toString(),
-          providerPayout: fees.providerAmount.toString(),
+          providerPayout: fees.providerPayout.toString(),
         },
         automatic_payment_methods: {
           enabled: true,
@@ -154,13 +163,13 @@ async function handlePurchaseThing(req: NextRequest, params: { id: string }, con
       const [booking] = await db
         .insert(bookingsTable)
         .values({
-          userId: userId,
+          customerId: userId,
           providerId: thing.sellerId,
           serviceType: 'marketplace_purchase',
           status: 'PAYMENT_PENDING',
-          totalAmount: fees.customerTotal.toString(),
+          totalAmount: fees.totalAmount.toString(),
           platformFee: fees.platformFee.toString(),
-          providerPayout: fees.providerAmount.toString(),
+          providerPayout: fees.providerPayout.toString(),
           currency: thing.currency || 'USD',
           metadata: {
             thingId: thingId,
@@ -183,17 +192,13 @@ async function handlePurchaseThing(req: NextRequest, params: { id: string }, con
         .insert(paymentsTable)
         .values({
           bookingId: booking.id,
-          amount: fees.customerTotal.toString(),
-          currency: thing.currency || 'USD',
+          userId: userId,
+          amountCents: Math.round(fees.totalAmount * 100),
+          currency: thing.currency || 'usd',
+          platformFeeCents: Math.round(fees.platformFee * 100),
+          providerPayoutCents: Math.round(fees.providerPayout * 100),
           status: 'pending',
-          paymentMethod: 'stripe',
           stripePaymentIntentId: paymentIntent.id,
-          metadata: {
-            type: 'thing_purchase',
-            thingId: thingId,
-          },
-          createdAt: new Date(),
-          updatedAt: new Date(),
         });
       
       // Send notification email to seller
@@ -205,9 +210,9 @@ async function handlePurchaseThing(req: NextRequest, params: { id: string }, con
           <p><strong>Price:</strong> $${itemPrice}</p>
           ${shippingCost > 0 ? `<p><strong>Shipping:</strong> $${shippingCost}</p>` : ''}
           <p><strong>Total:</strong> $${subtotal}</p>
-          <p><strong>Your Payout:</strong> $${fees.providerAmount.toFixed(2)} (after platform fee)</p>
+          <p><strong>Your Payout:</strong> $${fees.providerPayout.toFixed(2)} (after platform fee)</p>
           <hr>
-          <p><strong>Buyer:</strong> ${buyerProfile.displayName}</p>
+          <p><strong>Buyer:</strong> ${buyerProfile.email || 'Anonymous User'}</p>
           <p><strong>Delivery Method:</strong> ${body.deliveryMethod}</p>
           ${body.deliveryMethod === 'shipping' && body.shippingAddress ? `
             <p><strong>Ship to:</strong><br>
@@ -244,7 +249,7 @@ async function handlePurchaseThing(req: NextRequest, params: { id: string }, con
           booking: {
             id: booking.id,
             status: booking.status,
-            totalAmount: fees.customerTotal,
+            totalAmount: fees.totalAmount,
             paymentIntentId: paymentIntent.id,
             clientSecret: paymentIntent.client_secret,
           },
@@ -255,7 +260,7 @@ async function handlePurchaseThing(req: NextRequest, params: { id: string }, con
             shippingCost: shippingCost,
             subtotal: subtotal,
             platformFee: fees.platformFee,
-            total: fees.customerTotal,
+            total: fees.totalAmount,
             deliveryMethod: body.deliveryMethod,
             shippingAddress: body.shippingAddress,
             pickupSchedule: body.pickupSchedule,

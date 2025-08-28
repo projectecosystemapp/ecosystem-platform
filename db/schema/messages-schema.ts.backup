@@ -68,11 +68,6 @@ export const messagesTable = pgTable("messages", {
     .notNull()
     .references(() => profilesTable.userId, { onDelete: "cascade" }),
   
-  // Message recipient (for direct messages)
-  recipientId: text("recipient_id")
-    .notNull()
-    .references(() => profilesTable.userId, { onDelete: "cascade" }),
-  
   // Message content
   content: text("content").notNull(),
   messageType: text("message_type", { 
@@ -111,9 +106,6 @@ export const messagesTable = pgTable("messages", {
     
     // Index for sender
     senderIdx: sql`CREATE INDEX messages_sender_idx ON ${table} (sender_id);`,
-    
-    // Index for recipient
-    recipientIdx: sql`CREATE INDEX messages_recipient_idx ON ${table} (recipient_id);`,
     
     // Index for non-deleted messages
     activeMessagesIdx: sql`

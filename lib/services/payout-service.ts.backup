@@ -458,43 +458,20 @@ export class PayoutService {
     metadata: Record<string, any>
   ): Promise<void> {
     try {
-      // Only log to booking state transitions if we have a valid booking and the event maps to a valid booking status
-      if (metadata.bookingId && this.mapPayoutEventToBookingStatus(event)) {
-        const bookingStatus = this.mapPayoutEventToBookingStatus(event);
-        await db.insert(bookingStateTransitionsTable).values({
-          bookingId: metadata.bookingId as string,
-          fromStatus: null,
-          toStatus: bookingStatus,
-          triggeredBy: 'system',
-          triggerReason: 'payout_processing',
-          metadata: {
-            payoutId,
-            payoutEvent: event,
-            ...metadata
-          }
-        });
-      } else {
-        // For payout-specific events that don't map to booking states, just log to console
-        console.log('Payout event logged:', {
+      await db.insert(bookingStateTransitionsTable).values({
+        bookingId: (metadata.bookingId || payoutId) as string, // Use payoutId as fallback
+        fromStatus: null,
+        toStatus: event,
+        triggeredBy: 'system',
+        triggerReason: 'payout_processing',
+        metadata: {
           payoutId,
           event,
-          metadata
-        });
-      }
+          ...metadata
+        }
+      });
     } catch (error) {
       console.error('Failed to log payout event:', error);
-    }
-  }
-
-  private mapPayoutEventToBookingStatus(payoutEvent: string): string | null {
-    // Map payout events to valid booking status enum values only when appropriate
-    switch (payoutEvent) {
-      case 'payout_completed':
-        return 'completed'; // When payout is completed, booking is fully completed
-      case 'payout_failed':
-        return 'payment_failed'; // If payout fails, it's a payment issue
-      default:
-        return null; // Don't map other payout events to booking states
     }
   }
 

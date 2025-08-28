@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkSpaceAvailability, getSpaceById } from "@/db/queries/spaces-queries";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createSecureApiHandler, createApiResponse, createApiError, getValidatedBody } from "@/lib/security/api-handler";
 import { db } from "@/db/db";
-import { bookingsTable, spacesTable } from "@/db/schema";
+import { bookingsTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { calculateFees } from "@/lib/fees";
 import Stripe from "stripe";
@@ -58,19 +58,13 @@ const bookingSchema = z.object({
   return true;
 });
 
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
-
 /**
  * POST handler - Create space booking
  */
-async function handleCreateBooking(req: NextRequest, context: any, { params }: RouteParams) {
+async function handleCreateBooking(req: NextRequest, context: any) {
   try {
-    const { userId } = context;
-    const { id: spaceId } = params;
+    const { userId, params } = context;
+    const spaceId = params?.id;
     
     if (!spaceId) {
       return createApiError("Space ID is required", { status: 400 });
@@ -123,31 +117,32 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
     
     // Determine if this is a guest checkout
     const isGuest = !userId;
-    let customerId: string | null = null;
+    let customerId: string;
     let customerEmail: string;
     let customerName: string;
     let customerPhone: string | null = null;
-    
+
     if (isGuest) {
-      // Guest checkout - use guest email as customer ID
+      // Guest checkout - create a guest identifier for customerId
       if (!body.guestInfo) {
         return createApiError("Guest information is required for guest checkout", { status: 400 });
       }
-      
+
       customerEmail = body.guestInfo.email;
       customerName = `${body.guestInfo.firstName} ${body.guestInfo.lastName}`;
       customerPhone = body.guestInfo.phone;
-      customerId = `guest:${customerEmail}`;
+      // Create a guest identifier using email hash (consistent with other guest booking implementations)
+      customerId = `guest_${Buffer.from(customerEmail).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)}`;
     } else {
       // Authenticated user checkout
       const user = await currentUser();
       if (!user) {
         return createApiError("User not found", { status: 401 });
       }
-      
+
       customerEmail = user.emailAddresses[0].emailAddress;
-      customerName = user.firstName && user.lastName 
-        ? `${user.firstName} ${user.lastName}` 
+      customerName = user.firstName && user.lastName
+        ? `${user.firstName} ${user.lastName}`
         : user.username || "Customer";
       customerId = userId;
     }
@@ -185,14 +180,8 @@ async function handleCreateBooking(req: NextRequest, context: any, { params }: R
         spaceId: spaceId,
         metadata: {
           numberOfGuests: body.numberOfGuests,
-          spaceType: space.spaceType,
-          instantBooking: space.instantBooking,
-          priceType: availability.priceType,
-          agreedToTerms: body.agreedToTerms,
-          agreedToCancellationPolicy: body.agreedToCancellationPolicy,
-          cleaningFee,
-          securityDeposit,
-          guestSurcharge: isGuest ? fees.guestSurcharge : 0,
+          purpose: `Space booking for ${body.numberOfGuests} guests`,
+          setupRequirements: body.specialRequests?.join(', ') || undefined,
         },
       })
       .returning();

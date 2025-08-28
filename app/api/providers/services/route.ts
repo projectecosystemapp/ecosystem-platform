@@ -27,7 +27,7 @@ const createServiceSchema = z.object({
   duration: z.number().positive().int(), // Duration in minutes
   images: z.array(z.string()).optional(),
   active: z.boolean().default(true),
-  metadata: z.record(z.string()).optional(),
+  metadata: z.record(z.string(), z.string()).optional(),
 });
 
 // Service update schema

@@ -70,8 +70,8 @@ const createEventSchema = z.object({
   
   // Capacity & Pricing
   maxAttendees: z.number().min(1).optional(),
-  price: z.number().min(0),
-  earlyBirdPrice: z.number().min(0).optional(),
+  price: z.number().min(0).transform(val => val.toString()),
+  earlyBirdPrice: z.number().min(0).optional().transform(val => val ? val.toString() : undefined),
   earlyBirdDeadline: z.string().optional().transform(val => val ? new Date(val) : undefined),
   
   // Media
@@ -252,10 +252,21 @@ async function handleCreateEvent(req: NextRequest, context: any) {
       });
     }
     
+    // Generate slug from title
+    const generateSlug = (title: string): string => {
+      return title
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/--+/g, '-')
+        .trim();
+    };
+    
     // Create the event
     const event = await createEvent({
       ...body,
       providerId: provider.id,
+      slug: generateSlug(body.title),
       status: "published", // Auto-publish for now, can add draft mode later
       publishedAt: new Date(),
     });

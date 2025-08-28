@@ -44,7 +44,7 @@ export function ServiceBookingForm({
       baseAmount: service.price,
       serviceDuration: service.duration 
     });
-  }, [service.price, service.duration]);
+  }, [service.price, service.duration, onUpdate, formData]);
 
   const handleDateSelect = (date: Date | undefined) => {
     onUpdate({ 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -53,9 +53,9 @@ export function BookingHistory({ customerId, initialBookings = [] }: BookingHist
     if (initialBookings.length === 0) {
       fetchBookings();
     }
-  }, [customerId, initialBookings.length]);
+  }, [customerId, initialBookings.length, fetchBookings]);
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/bookings/customer/${customerId}`);
@@ -70,7 +70,7 @@ export function BookingHistory({ customerId, initialBookings = [] }: BookingHist
     } finally {
       setLoading(false);
     }
-  };
+  }, [customerId]);
 
   // Filter bookings by status
   const filterBookings = (bookings: Booking[], filter: string) => {

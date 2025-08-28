@@ -329,9 +329,29 @@ async function handleCreateSpace(req: NextRequest, context: any) {
       });
     }
     
+    // Generate slug from name
+    const slug = body.name.toLowerCase()
+      .replace(/[^\w\s-]/g, '') // Remove special characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .trim();
+
+    // Transform numeric fields to strings for database storage
+    const transformedBody = {
+      ...body,
+      ...(body.hourlyRate !== undefined && { hourlyRate: body.hourlyRate.toString() }),
+      ...(body.halfDayRate !== undefined && { halfDayRate: body.halfDayRate.toString() }),
+      ...(body.dailyRate !== undefined && { dailyRate: body.dailyRate.toString() }),
+      ...(body.weeklyRate !== undefined && { weeklyRate: body.weeklyRate.toString() }),
+      ...(body.monthlyRate !== undefined && { monthlyRate: body.monthlyRate.toString() }),
+      ...(body.cleaningFee !== undefined && { cleaningFee: body.cleaningFee.toString() }),
+      ...(body.securityDeposit !== undefined && { securityDeposit: body.securityDeposit.toString() }),
+    };
+
     // Create the space
     const space = await createSpace({
-      ...body,
+      ...transformedBody,
+      slug,
       providerId: provider.id,
       isActive: true,
       isVerified: false,

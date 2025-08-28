@@ -35,8 +35,8 @@ const SCORE_RANGES = {
   PROXIMITY: { min: 0, max: 100 },      // 0-100km normalized
   RELEVANCE: { min: 0, max: 1 },        // 0-1 relevance score
   CONVERSION: { min: 0, max: 0.5 },     // 0-50% conversion rate
-  RATING: { min: 0, max: 5 },           // 0-5 star rating
-  FRESHNESS: { min: 0, max: 30 },       // Days since last update
+  RATING: { min: 0, max: 6 },           // 0-6 to accommodate boosted ratings
+  FRESHNESS: { min: 0, max: 1460 },     // Updated range for 4-year window
 } as const;
 
 /**
@@ -349,16 +349,16 @@ export class RankingEngine {
     
     // Apply confidence adjustment based on review volume
     // More reviews = more confidence in the rating
-    const confidenceFactor = Math.min(totalReviews / 50, 1); // Cap at 50 reviews
-    score *= (0.5 + 0.5 * confidenceFactor);
+    const confidenceFactor = Math.min(totalReviews / 100, 1); // Cap at 100 reviews for better differentiation
+    score *= (0.7 + 0.3 * confidenceFactor); // Less aggressive adjustment
     
     // Boost for recent reviews (shows active service)
     if (recentReviewCount > 0) {
-      const recencyBoost = Math.min(recentReviewCount / 10, 0.2); // Up to 20% boost
+      const recencyBoost = Math.min(recentReviewCount / 20, 0.15); // Up to 15% boost, higher threshold
       score *= (1 + recencyBoost);
     }
     
-    return Math.min(score, SCORE_RANGES.RATING.max);
+    return score; // Remove the cap to allow proper differentiation
   }
 
   /**
@@ -367,11 +367,27 @@ export class RankingEngine {
   private calculateFreshnessScore(provider: ProviderRankingData): number {
     const daysSinceUpdate = this.getDaysSinceUpdate(provider.stats.lastAvailabilityUpdate);
     
-    // Inverse scoring (more recent = higher score)
-    const maxDays = SCORE_RANGES.FRESHNESS.max;
-    if (daysSinceUpdate >= maxDays) return 0;
+    // Handle very old dates (> 4 years) specially
+    const veryOldThreshold = 1460; // 4 years
+    if (daysSinceUpdate >= veryOldThreshold) {
+      return 0; // Very old dates get 0 score
+    }
     
-    return maxDays - daysSinceUpdate;
+    // Use a more gradual decay that preserves differences for moderate ages
+    const maxAge = 1095; // 3 years for main scoring range
+    
+    if (daysSinceUpdate >= maxAge) {
+      // Gradual decay from 3-4 years
+      const extraDays = daysSinceUpdate - maxAge;
+      const decayFactor = 1 - (extraDays / (veryOldThreshold - maxAge));
+      return Math.max(decayFactor * 50, 1); // Minimum score for differentiation in normal range
+    }
+    
+    // Use inverse quadratic decay for better differentiation
+    const normalizedAge = daysSinceUpdate / maxAge;
+    const score = maxAge * (1 - normalizedAge * normalizedAge);
+    
+    return Math.max(score, 1); // Ensure minimum score for differentiation
   }
 
   /**

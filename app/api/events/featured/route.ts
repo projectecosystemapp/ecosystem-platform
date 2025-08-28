@@ -119,7 +119,7 @@ async function handleGetFeaturedEvents(req: NextRequest) {
       favoriteCount: event.favoriteCount,
       slug: event.slug,
       provider: event.provider,
-      distance: event.distance,
+      distance: (event as any).distance ?? null,
     }));
     
     // Get category statistics if no specific category is selected

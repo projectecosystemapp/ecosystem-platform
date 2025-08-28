@@ -407,7 +407,6 @@ export async function createEvent(data: NewEvent) {
       .values({
         ...data,
         ...geocodingData,
-        slug: generateSlug(data.title),
         updatedAt: new Date(),
       })
       .returning();

@@ -22,6 +22,7 @@ import { z } from 'zod'
 import { deleteProviderImage, StorageError } from '@/lib/supabase/storage-helpers'
 import { createClient } from '@/lib/supabase/server'
 import { createSecureApiHandler } from '@/lib/security/api-handler'
+import { getCorsHeaders } from '@/lib/security/cors'
 
 // Request validation schema
 const DeleteRequestSchema = z.object({
@@ -142,15 +143,17 @@ async function handleImageDelete(req: NextRequest) {
 // Export route handler directly (security wrapper has type issues)
 export const DELETE = handleImageDelete
 
-// OPTIONS handler for CORS
+// OPTIONS handler for CORS - SECURITY: Use secure CORS headers
 export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+  
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      ...corsHeaders,
       'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token',
     },
   })
 }
