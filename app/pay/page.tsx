@@ -95,9 +95,6 @@ export default function PayPage() {
         return;
       }
       
-      // Log the checkout URL for debugging
-      console.log('Created Whop checkout with email metadata:', data.checkoutUrl);
-      
       // Redirect to the checkout URL
       window.location.href = data.checkoutUrl;
     } catch (err) {

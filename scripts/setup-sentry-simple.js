@@ -19,9 +19,7 @@ function main() {
     'sentry.client.config.ts',
     'sentry.server.config.ts', 
     'sentry.edge.config.ts',
-    'app/sentry-example-page/page.tsx',
-    'lib/ai/telemetry-config.ts',
-    'app/api/test/sentry-ai/route.ts'
+    'lib/ai/telemetry-config.ts'
   ];
   
   let allFilesExist = true;
@@ -83,9 +81,8 @@ function main() {
   
   console.log('\nTo test your Sentry integration:');
   console.log('1. npm run dev');
-  console.log('2. Visit http://localhost:3000/sentry-example-page'); 
-  console.log('3. Click the test buttons');
-  console.log('4. Check browser console (dev) or Sentry dashboard (prod)');
+  console.log('2. Trigger errors in your application'); 
+  console.log('3. Check browser console (dev) or Sentry dashboard (prod)');
   
   console.log('\n✨ Setup validation complete!\n');
 }

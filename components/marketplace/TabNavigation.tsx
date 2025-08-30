@@ -50,7 +50,6 @@ export default function TabNavigation() {
               style={{
                 color: isActive ? 'white' : theme.muted,
                 backgroundColor: isActive ? theme.primary : 'transparent',
-                focusRingColor: theme.primary,
               }}
               aria-label={`Switch to ${config.label} tab`}
               aria-current={isActive ? 'page' : undefined}

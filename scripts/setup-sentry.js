@@ -42,9 +42,7 @@ function checkSentryFiles() {
     { path: 'sentry.client.config.ts', desc: 'Client config' },
     { path: 'sentry.server.config.ts', desc: 'Server config' },
     { path: 'sentry.edge.config.ts', desc: 'Edge config' },
-    { path: 'app/sentry-example-page/page.tsx', desc: 'Test page' },
     { path: 'lib/ai/telemetry-config.ts', desc: 'AI telemetry config' },
-    { path: 'app/api/test/sentry-ai/route.ts', desc: 'AI test endpoint' },
   ];
   
   let allGood = true;
@@ -125,8 +123,7 @@ function printSetupInstructions() {
   
   console.log(chalk.white('\n3. Test the integration:'));
   console.log(chalk.gray('   • Run: npm run dev'));
-  console.log(chalk.gray('   • Visit: http://localhost:3000/sentry-example-page'));
-  console.log(chalk.gray('   • Click the test buttons'));
+  console.log(chalk.gray('   • Trigger errors in your application'));
   console.log(chalk.gray('   • Check your Sentry dashboard for events'));
   
   console.log(chalk.white('\n4. Production setup:'));
@@ -153,8 +150,7 @@ function printNextSteps(filesOk, envOk) {
   console.log(chalk.green('✅ Sentry is configured and ready to test!'));
   console.log(chalk.white('\nTo test your setup:'));
   console.log(chalk.cyan('   npm run dev'));
-  console.log(chalk.cyan('   # Open http://localhost:3000/sentry-example-page'));
-  console.log(chalk.cyan('   # Click the test buttons'));
+  console.log(chalk.cyan('   # Trigger application errors'));
   
   console.log(chalk.white('\nTo check if events are being captured:'));
   console.log(chalk.gray('   • Development: Check browser console'));

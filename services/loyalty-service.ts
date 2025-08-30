@@ -183,8 +183,6 @@ export async function awardBookingPoints(
       };
     });
 
-    console.log(`[LOYALTY] Awarded ${result.pointsEarned} points to customer ${customerId} for booking ${bookingId}`);
-
     return {
       success: true,
       pointsEarned: result.pointsEarned,
@@ -329,8 +327,6 @@ export async function awardReferralPoints(
         expiresAt: calculateExpirationDate(),
       });
     });
-
-    console.log(`[LOYALTY] Awarded referral points: ${REFERRER_POINTS} to referrer, ${REFERRED_POINTS} to referred user`);
 
     return {
       success: true,

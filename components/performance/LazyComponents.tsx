@@ -5,7 +5,6 @@
 
 import { lazy, Suspense, ComponentType, ReactElement } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Spinner } from '@/components/ui/spinner';
 import { Card } from '@/components/ui/card';
 
 // Loading fallback components
@@ -41,21 +40,15 @@ const ListSkeleton = () => (
 
 // Marketplace Components (Heavy)
 export const LazyMarketplaceContent = lazy(() => 
-  import('@/components/marketplace/unified/MarketplaceContent').then(module => ({
-    default: module.MarketplaceContent
-  }))
+  import('@/components/marketplace/unified/MarketplaceContent')
 );
 
 export const LazyUniversalListingCard = lazy(() =>
-  import('@/components/marketplace/cards/UniversalListingCard').then(module => ({
-    default: module.UniversalListingCard
-  }))
+  import('@/components/marketplace/cards/UniversalListingCard')
 );
 
 export const LazyMarketplaceLayout = lazy(() =>
-  import('@/components/marketplace/unified/MarketplaceLayout').then(module => ({
-    default: module.MarketplaceLayout
-  }))
+  import('@/components/marketplace/unified/MarketplaceLayout')
 );
 
 // Provider Components (Heavy)
@@ -194,7 +187,7 @@ export const MessageCenterLazy = createLazyComponent(
 export const LocationMapLazy = createLazyComponent(
   () => import('@/components/maps/LocationMap'),
   <div className="w-full h-64 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
-    <Spinner />
+    <div className="text-muted-foreground">Loading map...</div>
   </div>
 );
 

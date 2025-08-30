@@ -70,7 +70,6 @@ async function createConnectedAccount(userId: string): Promise<string> {
       })
       .where(eq(providersTable.userId, userId));
 
-    console.log(`Created Stripe Connect account ${account.id} for user ${userId}`);
     return account.id;
   } catch (error) {
     console.error('Error creating connected account:', error);

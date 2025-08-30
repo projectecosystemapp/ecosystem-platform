@@ -60,8 +60,6 @@ export class ReconciliationService {
     const endOfDay = new Date(reconciliationDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    console.log(`Starting reconciliation for ${startOfDay.toISOString()}`);
-
     // Create reconciliation run record
     const [runRecord] = await db
       .insert(reconciliationRunsTable)
