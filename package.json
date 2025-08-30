@@ -1,5 +1,5 @@
 {
-  "name": "prompting-test-project",
+  "name": "ecosystem-marketplace",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -19,8 +19,7 @@
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "video": "remotion studio",
-    "render": "remotion render src/remotion/index.tsx ShowcaseVideo out/video.mp4",
+
     "supabase:start": "npx supabase start",
     "supabase:stop": "npx supabase stop",
     "supabase:status": "npx supabase status",
@@ -39,7 +38,7 @@
     "security:audit": "npx tsx scripts/security-audit.ts",
     "security:check": "npm audit --audit-level=moderate && npm run security:audit",
     "sentry:setup": "node scripts/setup-sentry-simple.js",
-    "sentry:test": "curl -f http://localhost:3000/sentry-example-page || echo 'Start dev server first: npm run dev'",
+
     "redis:check": "npx tsx scripts/check-redis.ts",
     "redis:test": "npx tsx scripts/test-upstash-redis.ts",
     "redis:health": "curl -s http://localhost:3000/api/health/redis | jq",
@@ -152,8 +151,7 @@
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",
     "@playwright/test": "^1.55.0",
-    "@remotion/cli": "^4.0.327",
-    "@remotion/player": "^4.0.327",
+
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@types/canvas-confetti": "^1.9.0",
@@ -175,7 +173,7 @@
     "jest-environment-jsdom": "^30.0.5",
     "lint-staged": "^16.1.5",
     "postcss": "^8",
-    "remotion": "^4.0.327",
+
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "zod": "^4.1.3"

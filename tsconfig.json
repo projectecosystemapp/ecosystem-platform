@@ -14,7 +14,7 @@
     "incremental": true,
     "downlevelIteration": true,
     "target": "es2015",
-    "types": ["jest", "@testing-library/jest-dom"],
+
     "plugins": [
       {
         "name": "next"
